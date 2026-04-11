@@ -61,49 +61,53 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="absolute bottom-8 left-0 right-0 flex justify-center gap-8 text-white flex-wrap">
-              <Button
-                variant="link"
-                className="text-white hover:text-teal-400 pointer-events-auto"
-                onClick={() => router.push("/login")}
-              >
-                Login
-              </Button>
-              <Button
-                variant="link"
-                className="text-white hover:text-teal-400 pointer-events-auto"
-                onClick={() => router.push("/studio")}
-              >
-                Tools
-              </Button>
-              <Button
-                variant="link"
-                className="text-white hover:text-teal-400 pointer-events-auto"
-                onClick={() => router.push("/backtest")}
-              >
-                Performance
-              </Button>
-              <Button
-                variant="link"
-                className="text-white hover:text-teal-400 pointer-events-auto"
-                onClick={() => router.push("/trading")}
-              >
-                Dashboard
-              </Button>
-              <Button
-                variant="link"
-                className="text-white hover:text-teal-400 pointer-events-auto"
-                onClick={() => router.push("/community")}
-              >
-                Leaderboard
-              </Button>
-              <Button
-                variant="link"
-                className="text-white hover:text-teal-400 pointer-events-auto"
-                onClick={() => router.push("/strategy")}
-              >
-                Activity
-              </Button>
+            <div className="absolute bottom-8 left-0 right-0 flex justify-center text-white pointer-events-none">
+              <div className="overflow-x-auto max-w-full px-4 pointer-events-auto">
+                <div className="flex gap-6 whitespace-nowrap md:flex-wrap md:justify-center md:gap-8">
+                  <Button
+                    variant="link"
+                    className="text-white hover:text-teal-400 pointer-events-auto flex-shrink-0"
+                    onClick={() => router.push("/login")}
+                  >
+                    Login
+                  </Button>
+                  <Button
+                    variant="link"
+                    className="text-white hover:text-teal-400 pointer-events-auto flex-shrink-0"
+                    onClick={() => router.push("/studio")}
+                  >
+                    Tools
+                  </Button>
+                  <Button
+                    variant="link"
+                    className="text-white hover:text-teal-400 pointer-events-auto flex-shrink-0"
+                    onClick={() => router.push("/backtest")}
+                  >
+                    Performance
+                  </Button>
+                  <Button
+                    variant="link"
+                    className="text-white hover:text-teal-400 pointer-events-auto flex-shrink-0"
+                    onClick={() => router.push("/trading")}
+                  >
+                    Dashboard
+                  </Button>
+                  <Button
+                    variant="link"
+                    className="text-white hover:text-teal-400 pointer-events-auto flex-shrink-0"
+                    onClick={() => router.push("/community")}
+                  >
+                    Leaderboard
+                  </Button>
+                  <Button
+                    variant="link"
+                    className="text-white hover:text-teal-400 pointer-events-auto flex-shrink-0"
+                    onClick={() => router.push("/strategy")}
+                  >
+                    Activity
+                  </Button>
+                </div>
+              </div>
             </div>
           </div>
         </>
