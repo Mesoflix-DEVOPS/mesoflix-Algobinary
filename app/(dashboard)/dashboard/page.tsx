@@ -42,13 +42,34 @@ export default function DashboardPage() {
   const [tools, setTools] = React.useState<Tool[]>([])
   const [activities, setActivities] = React.useState<ActivityEvent[]>([])
   const [user, setUser] = React.useState<any>(null)
+  const [activeAccount, setActiveAccount] = React.useState<any>(null)
   const [isLoading, setIsLoading] = React.useState(true)
 
   React.useEffect(() => {
-    // Load local user
+    // Load local user & accounts
     const storedUser = localStorage.getItem("derivex_user")
+    const storedActiveId = localStorage.getItem("derivex_acct")
+    const storedAccounts = localStorage.getItem("derivex_accounts")
+    
+    let parsedUser = null
     if (storedUser) {
-      setUser(JSON.parse(storedUser))
+      parsedUser = JSON.parse(storedUser)
+      setUser(parsedUser)
+    }
+
+    if (storedActiveId && storedAccounts) {
+      const allAccounts = JSON.parse(storedAccounts)
+      const active = allAccounts.find((a: any) => a.account === storedActiveId)
+      if (active) {
+        setActiveAccount(active)
+      }
+    } else if (parsedUser) {
+        // Fallback to primary user if no active selection
+        setActiveAccount({
+            account: parsedUser.loginid,
+            balance: parsedUser.balance,
+            currency: parsedUser.currency
+        })
     }
 
     async function fetchData() {
@@ -64,7 +85,7 @@ export default function DashboardPage() {
     fetchData()
   }, [])
 
-  const isActiveDemo = user?.loginid?.startsWith('VRTC')
+  const isActiveDemo = activeAccount?.account?.startsWith('VRTC')
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -86,10 +107,10 @@ export default function DashboardPage() {
                 <Badge className={cn(
                     "px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] rounded-full border",
                     isActiveDemo 
-                        ? "bg-orange-500/10 text-orange-500 border-orange-500/20" 
-                        : "bg-teal-500/10 text-teal-500 border-teal-500/20"
+                        ? "bg-orange-500/20 text-orange-500 border-orange-500/30" 
+                        : "bg-teal-500/20 text-teal-500 border-teal-500/30"
                 )}>
-                    {isActiveDemo ? "Virtual Environment Active" : "Real Money Trading Mode"}
+                    {isActiveDemo ? "Virtual practice environment active" : "Real institutional trading mode"}
                 </Badge>
                 <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-white/5 border border-white/5">
                     <div className={cn("w-1.5 h-1.5 rounded-full animate-pulse", isActiveDemo ? "bg-orange-500" : "bg-teal-500")} />
@@ -98,7 +119,7 @@ export default function DashboardPage() {
             </div>
 
             <h1 className="text-3xl md:text-4xl font-black text-white tracking-tight">
-              Welcome, <span className={cn("transition-colors duration-700", isActiveDemo ? "text-orange-400" : "text-teal-400")}>
+              Welcome back, <span className={cn("transition-colors duration-700", isActiveDemo ? "text-orange-400" : "text-teal-400")}>
                 {user?.fullname || user?.loginid || "Guest"}
               </span>
             </h1>
@@ -106,7 +127,7 @@ export default function DashboardPage() {
             <div className="flex flex-wrap items-center gap-6 mt-6">
               <div className="flex flex-col">
                 <span className="text-[10px] uppercase tracking-[0.2em] text-gray-500 font-black">Contract ID</span>
-                <span className="text-sm font-bold text-white font-mono mt-1">{user?.loginid || "---"}</span>
+                <span className="text-sm font-bold text-white font-mono mt-1">{activeAccount?.account || "---"}</span>
               </div>
               <div className="w-[1px] h-8 bg-white/10" />
               <div className="flex flex-col">
@@ -115,8 +136,8 @@ export default function DashboardPage() {
                     "text-xl font-black mt-0.5 flex items-center gap-2",
                     isActiveDemo ? "text-orange-400" : "text-teal-400"
                 )}>
-                    <span className="text-xs opacity-50 font-bold">{user?.currency || "USD"}</span>
-                    {parseFloat(user?.balance || "0").toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    <span className="text-xs opacity-50 font-bold">{activeAccount?.currency || "USD"}</span>
+                    {parseFloat(activeAccount?.balance || "0").toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </span>
               </div>
             </div>
