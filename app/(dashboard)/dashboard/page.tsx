@@ -41,9 +41,16 @@ interface ActivityEvent {
 export default function DashboardPage() {
   const [tools, setTools] = React.useState<Tool[]>([])
   const [activities, setActivities] = React.useState<ActivityEvent[]>([])
+  const [user, setUser] = React.useState<any>(null)
   const [isLoading, setIsLoading] = React.useState(true)
 
   React.useEffect(() => {
+    // Load local user
+    const storedUser = localStorage.getItem("derivex_user")
+    if (storedUser) {
+      setUser(JSON.parse(storedUser))
+    }
+
     async function fetchData() {
       const [toolsRes, activityRes] = await Promise.all([
         supabase.from("trading_tools").select("*").order("name"),
@@ -65,7 +72,7 @@ export default function DashboardPage() {
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-2">
             <h1 className="text-3xl md:text-4xl font-bold text-white tracking-tight">
-              Welcome back, <span className="text-teal-400">Guest Trader</span>
+              Welcome back, <span className="text-teal-400">{user?.fullname || user?.loginid || "Guest Trader"}</span>
             </h1>
             <p className="text-gray-400 font-medium">
               System is operational. Your trading cockpit is ready for deployment.
@@ -73,12 +80,14 @@ export default function DashboardPage() {
             <div className="flex items-center gap-4 mt-6">
               <div className="flex flex-col">
                 <span className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Deriv ID</span>
-                <span className="text-sm font-mono text-white">CR1000000</span>
+                <span className="text-sm font-mono text-white">{user?.loginid || "CR1000000"}</span>
               </div>
               <div className="w-[1px] h-8 bg-white/10" />
               <div className="flex flex-col">
-                <span className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Account Type</span>
-                <Badge variant="outline" className="mt-1 bg-teal-500/10 text-teal-500 border-teal-500/20">Demo Account</Badge>
+                <span className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Balance</span>
+                <span className="text-sm font-bold text-teal-400">
+                    {user?.currency || "USD"} {parseFloat(user?.balance || "0").toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </span>
               </div>
             </div>
           </div>

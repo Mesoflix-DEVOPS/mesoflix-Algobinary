@@ -39,9 +39,22 @@ interface Tool {
 export function AppSidebar() {
   const pathname = usePathname()
   const [tools, setTools] = React.useState<Tool[]>([])
-  const { state } = useSidebar()
+  const [user, setUser] = React.useState<any>(null)
+  const { state, setOpenMobile, isMobile } = useSidebar()
+
+  const handleLinkClick = () => {
+    if (isMobile) {
+      setOpenMobile(false)
+    }
+  }
 
   React.useEffect(() => {
+    // Load local user if exists
+    const storedUser = localStorage.getItem("derivex_user")
+    if (storedUser) {
+      setUser(JSON.parse(storedUser))
+    }
+
     async function fetchTools() {
       const { data, error } = await supabase
         .from("trading_tools")
@@ -101,7 +114,7 @@ export function AppSidebar() {
                   )}
                   tooltip={item.title}
                 >
-                  <Link href={item.href}>
+                  <Link href={item.href} onClick={handleLinkClick}>
                     <item.icon className="w-5 h-5" />
                     <span>{item.title}</span>
                   </Link>
@@ -126,7 +139,7 @@ export function AppSidebar() {
                     )}
                     tooltip={tool.name}
                   >
-                    <Link href={`/tool/${tool.id}`} className="flex items-center justify-between w-full">
+                    <Link href={`/tool/${tool.id}`} onClick={handleLinkClick} className="flex items-center justify-between w-full">
                       <div className="flex items-center gap-2">
                         <Circle className="w-2 h-2 fill-teal-500 text-teal-500 shadow-[0_0_8px_rgba(20,184,166,0.8)]" />
                         <span>{tool.name}</span>
@@ -153,7 +166,7 @@ export function AppSidebar() {
                   className="text-gray-400 hover:bg-white/5"
                   tooltip={item.title}
                 >
-                  <Link href={item.href}>
+                  <Link href={item.href} onClick={handleLinkClick}>
                     <item.icon className="w-5 h-5" />
                     <span>{item.title}</span>
                   </Link>
@@ -174,10 +187,10 @@ export function AppSidebar() {
                   className="text-gray-400 hover:bg-white/5"
                   tooltip={item.title}
                 >
-                  <Link href={item.href}>
+                  <Link href={item.href} onClick={handleLinkClick}>
                     <item.icon className="w-5 h-5" />
                     <span>{item.title}</span>
-                  </Link>
+                    </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             ))}
@@ -188,14 +201,24 @@ export function AppSidebar() {
       <SidebarFooter className="border-t border-white/5 p-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-teal-500 to-blue-500 flex items-center justify-center text-black font-bold border-2 border-white/10 ring-2 ring-teal-500/20">
-            GT
+            {user?.fullname?.[0] || user?.loginid?.[0] || "GT"}
           </div>
           {state === "expanded" && (
             <div className="flex flex-col min-w-0">
-              <span className="text-sm font-semibold text-white truncate">Guest Trader</span>
+              <span className="text-sm font-semibold text-white truncate">
+                {user?.fullname || user?.loginid || "Guest Trader"}
+              </span>
               <div className="flex items-center gap-1.5 mt-0.5">
-                <span className="w-2 h-2 rounded-full bg-teal-500 animate-pulse shadow-[0_0_8px_rgba(20,184,166,0.8)]" />
-                <span className="text-[10px] text-teal-500 font-bold uppercase tracking-wider">Connected</span>
+                <span className={cn(
+                  "w-2 h-2 rounded-full shadow-[0_0_8px_rgba(20,184,166,0.8)]",
+                  user ? "bg-teal-500 animate-pulse" : "bg-gray-600"
+                )} />
+                <span className={cn(
+                  "text-[10px] font-bold uppercase tracking-wider",
+                  user ? "text-teal-500" : "text-gray-600"
+                )}>
+                  {user ? "Connected" : "Disconnected"}
+                </span>
               </div>
             </div>
           )}

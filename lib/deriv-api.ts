@@ -1,7 +1,7 @@
 // Deriv API Integration
-// App ID: 111053
+// App ID: 114779
 
-const DERIV_APP_ID = process.env.NEXT_PUBLIC_DERIV_APP_ID || "111053"
+const DERIV_APP_ID = process.env.NEXT_PUBLIC_DERIV_APP_ID || "114779"
 const DERIV_API_URL = "wss://ws.derivws.com/websockets/v3"
 
 interface DerivMessage {

@@ -27,10 +27,20 @@ export default function LoginPage() {
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center pointer-events-auto">
             <Button
-              className="bg-teal-500 hover:bg-teal-600 text-black font-bold px-8 py-6 text-lg"
-              onClick={() => router.push("/")}
+              className="bg-teal-500 hover:bg-teal-600 text-black font-bold px-8 py-6 text-lg rounded-xl shadow-[0_0_20px_rgba(20,184,166,0.3)] transition-all hover:scale-105"
+              onClick={() => {
+                const appId = "114779";
+                window.location.href = `https://oauth.deriv.com/oauth2/authorize?app_id=${appId}&l=EN&brand=deriv`;
+              }}
             >
-              Back to Home
+              Connect with Deriv
+            </Button>
+            <Button
+                variant="outline"
+                className="border-white/10 text-gray-400 hover:bg-white/5 px-8 py-6 text-lg rounded-xl"
+                onClick={() => router.push("/")}
+            >
+                Back to Home
             </Button>
           </div>
         </div>
