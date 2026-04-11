@@ -46,17 +46,17 @@ export default function Home() {
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center pointer-events-auto">
                 <Button
-                  className="bg-teal-500 hover:bg-teal-600 text-black font-bold px-8 py-6 text-lg"
-                  onClick={() => router.push("/login")}
+                  className="bg-teal-500 hover:bg-teal-600 text-black font-bold px-8 py-6 text-lg rounded-xl shadow-[0_0_20px_rgba(20,184,166,0.5)] transition-all"
+                  onClick={() => router.push("/dashboard")}
                 >
-                  Connect with Deriv
+                  Enter Command Center
                 </Button>
                 <Button
                   variant="outline"
-                  className="border-teal-500 text-teal-500 hover:bg-teal-900/20 px-8 py-6 text-lg"
-                  onClick={() => router.push("/trading")}
+                  className="border-teal-500 text-teal-500 hover:bg-teal-900/20 px-8 py-6 text-lg rounded-xl"
+                  onClick={() => router.push("/dashboard")}
                 >
-                  Explore Tools
+                  Browse Tools
                 </Button>
               </div>
             </div>
