@@ -44,16 +44,24 @@ export default function SettingsPage() {
   const handleUpdateAvatar = async (url: string) => {
     if (!user) return
     setIsSaving(true)
+    
+    // Identify via Deriv Account ID or internal ID as fallback
+    const identifier = user.loginid || user.deriv_account_id || user.id
+    const filterColumn = (user.loginid || user.deriv_account_id) ? "deriv_account_id" : "id"
+
     try {
         const { error } = await supabase
             .from("users")
             .update({ avatar_url: url })
-            .eq("id", user.id)
+            .eq(filterColumn, identifier)
 
         if (!error) {
             const updatedUser = { ...user, avatar_url: url }
             localStorage.setItem("derivex_user", JSON.stringify(updatedUser))
             setUser(updatedUser)
+            window.dispatchEvent(new Event('storage')) // Force navbar sync
+        } else {
+            console.error("Supabase update error:", error)
         }
     } catch (err) {
         console.error("Failed to update avatar:", err)
