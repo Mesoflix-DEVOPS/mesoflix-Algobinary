@@ -1,10 +1,9 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { Canvas } from "@react-three/fiber"
-import { Environment, Float, Text3D } from "@react-three/drei"
-import { Navigation } from "@/components/navigation"
-import { TradingDashboard } from "@/components/trading-dashboard"
+import { Button } from "@/components/ui/button"
+import { MainScene } from "@/components/main-scene"
+import { Activity } from "lucide-react"
 
 export default function TradingPage() {
   const router = useRouter()
@@ -12,34 +11,28 @@ export default function TradingPage() {
   return (
     <main className="relative w-full h-screen overflow-hidden bg-black">
       <div className="absolute inset-0 z-10">
-        <Canvas camera={{ position: [0, 0, 15], fov: 60 }}>
-          <color attach="background" args={["#050505"]} />
-          <Environment preset="city" />
-
-          <Float speed={1} rotationIntensity={0.2} floatIntensity={0.5} position={[0, 3, 0]}>
-            <Text3D
-              font="/fonts/Geist_Bold.json"
-              size={1.2}
-              height={0.2}
-              curveSegments={12}
-              bevelEnabled
-              bevelThickness={0.02}
-              bevelSize={0.02}
-              bevelOffset={0}
-              bevelSegments={5}
-            >
-              Trading Dashboard
-              <meshStandardMaterial color="#14b8a6" metalness={0.8} roughness={0.2} />
-            </Text3D>
-          </Float>
-        </Canvas>
+        <MainScene />
       </div>
 
-      <Navigation />
-
-      <div className="absolute inset-0 z-20 flex items-center justify-center p-4 pointer-events-none">
-        <div className="w-full max-w-6xl pointer-events-auto">
-          <TradingDashboard />
+      <div className="absolute inset-0 z-20 flex flex-col items-center justify-center p-4 pointer-events-none">
+        <div className="max-w-2xl text-center mb-8">
+          <div className="mb-6 inline-flex items-center justify-center w-16 h-16 rounded-lg bg-teal-500/10 border border-teal-500/30">
+            <Activity className="h-8 w-8 text-teal-500" />
+          </div>
+          <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">
+            Trading <span className="text-teal-500">Dashboard</span>
+          </h1>
+          <p className="text-lg md:text-xl text-gray-300 mb-8">
+            Monitor live markets and execute trades with real-time data. Coming soon.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center pointer-events-auto">
+            <Button
+              className="bg-teal-500 hover:bg-teal-600 text-black font-bold px-8 py-6 text-lg"
+              onClick={() => router.push("/")}
+            >
+              Back to Home
+            </Button>
+          </div>
         </div>
       </div>
     </main>
