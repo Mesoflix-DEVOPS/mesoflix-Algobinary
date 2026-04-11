@@ -146,7 +146,47 @@ export function BotDisplay({
         </div>
 
         {/* Central ROI Counter */}
-        <div className="relative flex flex-col items-center justify-center min-h-[240px] overflow-hidden rounded-2xl bg-gradient-to-b from-white/5 to-transparent border border-white/5">
+        <div className="relative flex flex-col items-center justify-center min-h-[240px] overflow-hidden rounded-2xl bg-black/40 border border-white/5 group">
+            {/* Dynamic Barrier Background Chart */}
+            <div className="absolute inset-0 opacity-20 group-hover:opacity-30 transition-opacity">
+                <svg className="w-full h-full" preserveAspectRatio="none">
+                    <defs>
+                        <linearGradient id="barrierGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stopColor={isProfit ? "#2dd4bf" : "#fb7185"} stopOpacity="0.2" />
+                            <stop offset="100%" stopColor="transparent" stopOpacity="0" />
+                        </linearGradient>
+                    </defs>
+                    
+                    {/* Horizontal Axis (Static Barrier Target) */}
+                    <line 
+                        x1="0" y1="50%" x2="100%" y2="50%" 
+                        stroke="white" strokeWidth="1" strokeDasharray="4 4" strokeOpacity="0.2" 
+                    />
+
+                    {/* Proximity Waveform (Synthetic Dist-Graph) */}
+                    {state === 'IN_TRADE' && (
+                        <path
+                            d={`M 0 120 Q 50 ${120 - (metrics.barrierDistance * 10)} 100 120`}
+                            fill="url(#barrierGradient)"
+                            className="animate-pulse"
+                        />
+                    )}
+
+                    {/* Live Spot Pulse Marker */}
+                    {livePrice && (
+                        <circle 
+                            cx="50%" 
+                            cy={`${50 + (metrics.trendStrength / 5)}%`} 
+                            r="4" 
+                            className={cn(
+                                "fill-current transition-all duration-500",
+                                isProfit ? "text-teal-400" : "text-red-400"
+                            )} 
+                        />
+                    )}
+                </svg>
+            </div>
+
             {state === 'SCANNING' && (
                 <div className="absolute inset-0 flex items-center justify-center opacity-30 pointer-events-none">
                     <Radar className="w-48 h-48 text-teal-400/20 animate-spin-slow" />
