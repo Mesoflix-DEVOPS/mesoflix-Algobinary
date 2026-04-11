@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { derivAPI } from '@/lib/deriv-api'
 
-export type BotState = 'IDLE' | 'RUNNING' | 'IN_TRADE' | 'COOLDOWN' | 'STOPPED'
+export type BotState = 'IDLE' | 'SCANNING' | 'IN_TRADE' | 'COOLDOWN' | 'STOPPED'
 export type TradeMode = 'TOUCH' | 'NO_TOUCH'
 
 interface TradeSettings {
@@ -16,7 +16,8 @@ interface TradeSettings {
   market: string
   autoSwitch: boolean
   tradeMode: TradeMode
-  barrierOffset: number
+  kMultiplier: number
+  volatilityThreshold: number
 }
 
 interface SessionStats {
@@ -36,6 +37,13 @@ interface CurrentTrade {
   startTime: number
 }
 
+interface StrategicMetrics {
+  volatility: number
+  trendStrength: number // -100 to 100
+  trendDirection: 'sideways' | 'bullish' | 'bearish'
+  barrierDistance: number
+}
+
 export function useTradeBot(settings: TradeSettings) {
   const [state, setState] = useState<BotState>('IDLE')
   const [stats, setStats] = useState<SessionStats>({
@@ -50,8 +58,16 @@ export function useTradeBot(settings: TradeSettings) {
   const [cooldownTime, setCooldownTime] = useState(0)
   const [livePrice, setLivePrice] = useState<number | null>(null)
   
+  const [metrics, setMetrics] = useState<StrategicMetrics>({
+    volatility: 0,
+    trendStrength: 0,
+    trendDirection: 'sideways',
+    barrierDistance: 0
+  })
+
   const stateRef = useRef<BotState>('IDLE')
   const tickSubId = useRef<number | null>(null)
+  const tickBuffer = useRef<number[]>([])
 
   const addLog = useCallback((action: string, details: string, level: 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR' = 'INFO') => {
     setLogs(prev => [{
@@ -63,7 +79,43 @@ export function useTradeBot(settings: TradeSettings) {
     }, ...prev].slice(0, 50))
   }, [])
 
-  // Subscribe to Ticks for Live Price
+  // Strategy Analysis
+  const analyzeMarket = useCallback(() => {
+    if (tickBuffer.current.length < 20) return null
+
+    const buffer = tickBuffer.current
+    const last20 = buffer.slice(-20)
+    const last10 = buffer.slice(-10)
+
+    // 1. Calculate Volatility (Avg absolute change)
+    let totalChange = 0
+    for (let i = 1; i < last20.length; i++) {
+        totalChange += Math.abs(last20[i] - last20[i-1])
+    }
+    const volatility = totalChange / (last20.length - 1)
+
+    // 2. Trend Detection (Simple comparison)
+    const startPrice = last10[0]
+    const endPrice = last10[last10.length - 1]
+    const priceChange = endPrice - startPrice
+    const trendStrength = Math.min(Math.max((priceChange / volatility) * 10, -100), 100)
+    
+    let trendDirection: 'sideways' | 'bullish' | 'bearish' = 'sideways'
+    if (trendStrength > 30) trendDirection = 'bullish'
+    else if (trendStrength < -30) trendDirection = 'bearish'
+
+    // 3. Adaptive Barrier
+    const barrierDistance = volatility * settings.kMultiplier
+
+    return {
+        volatility: Number(volatility.toFixed(4)),
+        trendStrength: Math.round(trendStrength),
+        trendDirection,
+        barrierDistance: Number(barrierDistance.toFixed(4))
+    }
+  }, [settings.kMultiplier])
+
+  // Process Ticks
   useEffect(() => {
     let isSubscribed = true
     
@@ -73,8 +125,21 @@ export function useTradeBot(settings: TradeSettings) {
         }
         
         tickSubId.current = await derivAPI.subscribeToTicks(settings.market, (tick) => {
-            if (isSubscribed) {
-                setLivePrice(Number(tick.quote))
+            if (!isSubscribed) return
+            
+            const price = Number(tick.quote)
+            setLivePrice(price)
+            
+            // Manage Buffer
+            tickBuffer.current.push(price)
+            if (tickBuffer.current.length > 50) {
+                tickBuffer.current.shift()
+            }
+
+            // Recalculate Metrics
+            const newMetrics = analyzeMarket()
+            if (newMetrics) {
+                setMetrics(newMetrics)
             }
         })
     }
@@ -88,30 +153,28 @@ export function useTradeBot(settings: TradeSettings) {
             tickSubId.current = null
         }
     }
-  }, [settings.market])
+  }, [settings.market, analyzeMarket])
 
   const startBot = async () => {
-    addLog('START', `Starting bot on ${settings.market} (${settings.tradeMode} Mode)...`, 'SUCCESS')
-    setState('RUNNING')
-    stateRef.current = 'RUNNING'
+    addLog('START', `StatEngine Initializing on ${settings.market}...`, 'SUCCESS')
+    setState('SCANNING')
+    stateRef.current = 'SCANNING'
   }
 
   const stopBot = () => {
-    addLog('STOP', 'Stopping bot...', 'WARNING')
+    addLog('STOP', 'Bot stopped manually.', 'WARNING')
     setState('STOPPED')
     stateRef.current = 'STOPPED'
   }
 
-  const executeTrade = useCallback(async () => {
-    if (stateRef.current !== 'RUNNING' || !livePrice) return
+  const executeTrade = useCallback(async (computedBarrier: number) => {
+    if (stateRef.current !== 'SCANNING' || !livePrice) return
     
     try {
       const type = settings.tradeMode === 'TOUCH' ? 'ONETOUCH' : 'NOTOUCH'
-      // Barrier logic: For Touch, usually trend following. For No Touch, usually stable.
-      // We'll use a + offset for simplicity in this version
-      const barrier = `+${settings.barrierOffset}`
+      const barrier = `+${computedBarrier}`
       
-      addLog('BUY_ORDER', `Placing 2-min ${settings.tradeMode} on ${settings.market} (Barrier: ${barrier})...`)
+      addLog('ENTRY', `Strategy Met: Placing 2-min ${settings.tradeMode} (Vol: ${metrics.volatility}, Trend: ${metrics.trendDirection})`, 'SUCCESS')
       
       const resp = await derivAPI.buyContract({
         contractType: type,
@@ -124,15 +187,16 @@ export function useTradeBot(settings: TradeSettings) {
 
       if (resp.error) {
         addLog('ERROR', resp.error.message, 'ERROR')
-        setState('RUNNING')
-        stateRef.current = 'RUNNING'
+        setState('SCANNING')
+        stateRef.current = 'SCANNING'
         return
       }
 
       const tradeId = resp.buy.contract_id
       
-      // Subscribe to real-time updates
       derivAPI.subscribeToOpenContract(tradeId, (contract) => {
+          if (!stateRef.current) return // Safety
+
           setCurrentTrade({
               id: tradeId,
               symbol: settings.market,
@@ -160,10 +224,10 @@ export function useTradeBot(settings: TradeSettings) {
                   }
               })
               
-              addLog(isWin ? 'TRADE_WON' : 'TRADE_LOST', `Result: ${isWin ? '+' : ''}${p.toFixed(2)} on ${tradeId}`, isWin ? 'SUCCESS' : 'ERROR')
+              addLog(isWin ? 'SETTLED' : 'SETTLED', `Result: ${isWin ? '+' : ''}${p.toFixed(2)} on ${tradeId}`, isWin ? 'SUCCESS' : 'ERROR')
               setCurrentTrade(null)
-              setState('RUNNING')
-              stateRef.current = 'RUNNING'
+              setState('SCANNING')
+              stateRef.current = 'SCANNING'
           }
       })
       
@@ -172,45 +236,58 @@ export function useTradeBot(settings: TradeSettings) {
       
     } catch (err: any) {
       addLog('ERROR', err.message || 'Trade execution failed', 'ERROR')
-      setState('RUNNING')
-      stateRef.current = 'RUNNING'
+      setState('SCANNING')
+      stateRef.current = 'SCANNING'
     }
-  }, [settings, livePrice, addLog])
+  }, [settings, livePrice, metrics, addLog])
 
-  // Bot Loop Logic
+  // Decision Engine Loop
   useEffect(() => {
-    if (state === 'RUNNING') {
+    if (state === 'SCANNING') {
         // Enforce Session Stop Conditions
         if (stats.trades >= settings.maxTrades) {
-            addLog('SYSTEM', 'Max trades reached. Ending session.', 'INFO')
+            addLog('IDLE', 'Max trades reached. Ending session.', 'INFO')
             stopBot()
             return
         }
         if (stats.profit >= settings.takeProfit) {
-            addLog('SYSTEM', 'Take profit reached! Ending session.', 'SUCCESS')
+            addLog('IDLE', 'Take profit reached! Ending session.', 'SUCCESS')
             stopBot()
             return
         }
         if (stats.profit <= -settings.stopLoss) {
-            addLog('SYSTEM', 'Stop loss hit. Ending session.', 'ERROR')
+            addLog('IDLE', 'Stop loss hit. Ending session.', 'ERROR')
             stopBot()
             return
         }
 
         // Check for Cooldown
         if (stats.trades > 0 && stats.trades % settings.cooldownTrigger === 0 && cooldownTime === 0) {
-            addLog('COOLDOWN', `Entering cooldown for ${settings.cooldownDuration} minute...`, 'WARNING')
+            addLog('COOLDOWN', `Session Cooldown: Resting for ${settings.cooldownDuration} minute...`, 'WARNING')
             setState('COOLDOWN')
             stateRef.current = 'COOLDOWN'
             setCooldownTime(60)
             return
         }
 
-        // Logic to enter trade (Wait for a signal or pulse)
-        // For Week 1: Basic frequency based execution
-        executeTrade()
+        // --- Strategic Decision Engine ---
+        if (metrics.volatility > 0) {
+            const isVolatilitySafe = metrics.volatility < settings.volatilityThreshold
+            const isSideways = metrics.trendDirection === 'sideways'
+            
+            if (settings.tradeMode === 'NO_TOUCH') {
+                if (isVolatilitySafe && isSideways) {
+                    executeTrade(metrics.barrierDistance)
+                }
+            } else if (settings.tradeMode === 'TOUCH') {
+                // Advanced Touch logic: Trend + Momentum
+                if (!isSideways && metrics.volatility > settings.volatilityThreshold * 0.5) {
+                    executeTrade(metrics.barrierDistance * 0.5) // Closer barrier for touch
+                }
+            }
+        }
     }
-  }, [state, stats, settings, cooldownTime, executeTrade, addLog])
+  }, [state, stats, settings, cooldownTime, metrics, executeTrade, addLog])
 
   // Cooldown Countdown
   useEffect(() => {
@@ -219,8 +296,8 @@ export function useTradeBot(settings: TradeSettings) {
       timer = setInterval(() => {
         setCooldownTime(prev => {
           if (prev <= 1) {
-            setState('RUNNING')
-            stateRef.current = 'RUNNING'
+            setState('SCANNING')
+            stateRef.current = 'SCANNING'
             return 0
           }
           return prev - 1
@@ -237,10 +314,11 @@ export function useTradeBot(settings: TradeSettings) {
     logs,
     cooldownTime,
     livePrice,
+    metrics,
     startBot,
     stopBot,
     closeTrade: () => {
-        addLog('MANUAL_CLOSE', 'Manually closing trade...', 'WARNING')
+        addLog('HALT', 'Manual trade closure ignored for strategy integrity.', 'WARNING')
     }
   }
 }

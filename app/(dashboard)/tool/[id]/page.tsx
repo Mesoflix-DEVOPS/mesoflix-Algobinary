@@ -22,8 +22,9 @@ export default function SessionTraderPage() {
     cooldownDuration: 1,
     market: 'R_100',
     autoSwitch: true,
-    tradeMode: 'TOUCH' as TradeMode,
-    barrierOffset: 0.5
+    tradeMode: 'NO_TOUCH' as TradeMode,
+    kMultiplier: 10,
+    volatilityThreshold: 0.5
   })
 
   const bot = useTradeBot(settings)
@@ -50,11 +51,11 @@ export default function SessionTraderPage() {
         <h1 className="text-2xl font-black text-white uppercase tracking-tighter flex items-center gap-3">
             {toolName}
             <div className="px-2 py-0.5 rounded bg-teal-500/10 border border-teal-500/20 text-[10px] text-teal-400 font-black tracking-widest">
-                v1.5.0-TOUCH
+                v2.0.0-STRAT
             </div>
         </h1>
         <p className="text-xs text-muted-foreground uppercase tracking-widest font-medium">
-            Touch/No Touch System • Barrier Algorithmic Execution
+            Statistical Decision Engine • Adaptive Barrier Calibration
         </p>
       </div>
 
@@ -76,6 +77,7 @@ export default function SessionTraderPage() {
                 currentTrade={bot.currentTrade}
                 cooldownTime={bot.cooldownTime}
                 livePrice={bot.livePrice}
+                metrics={bot.metrics}
                 onStart={bot.startBot}
                 onStop={bot.stopBot}
                 onCloseTrade={bot.closeTrade}

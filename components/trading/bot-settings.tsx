@@ -7,7 +7,10 @@ import { Slider } from "@/components/ui/slider"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Settings2, Coins, Target, Octagon, Zap, Repeat, ArrowRightLeft, ShieldCheck } from "lucide-react"
+import { 
+  Settings2, Coins, Target, Octagon, Zap, Repeat, 
+  ArrowRightLeft, ShieldCheck, Cpu, SlidersHorizontal 
+} from "lucide-react"
 
 interface BotSettingsProps {
   settings: any
@@ -32,17 +35,17 @@ export function BotSettings({ settings, setSettings, disabled }: BotSettingsProp
     <Card className="bg-black/40 border-white/5 backdrop-blur-xl h-full flex flex-col">
       <CardHeader className="border-b border-white/5 pb-4">
         <CardTitle className="flex items-center gap-2 text-lg">
-          <Settings2 className="w-5 h-5 text-teal-400" />
-          Bot Configuration
+          <Cpu className="w-5 h-5 text-teal-400" />
+          Strategy Engine
         </CardTitle>
-        <CardDescription>Setup your session risk and pacing</CardDescription>
+        <CardDescription>Statistical tuning & risk guardrails</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6 pt-6 flex-1 overflow-y-auto custom-scrollbar pr-2">
-        {/* Trade Mode Switcher */}
+        {/* Mode Switcher */}
         <div className="space-y-3">
-            <Label className="text-xs uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+            <Label className="text-[10px] uppercase tracking-widest text-muted-foreground flex items-center gap-2 font-black">
                 <ArrowRightLeft className="w-3 h-3" />
-                Execution System
+                Execution Logic
             </Label>
             <Tabs 
                 value={settings.tradeMode} 
@@ -51,129 +54,127 @@ export function BotSettings({ settings, setSettings, disabled }: BotSettingsProp
             >
                 <TabsList className="grid w-full grid-cols-2 bg-white/5 border border-white/10 h-10 p-1">
                     <TabsTrigger 
-                        value="TOUCH" 
-                        disabled={disabled}
-                        className="data-[state=active]:bg-teal-500 data-[state=active]:text-black font-black text-[10px] tracking-widest uppercase transition-all"
-                    >
-                        Touch
-                    </TabsTrigger>
-                    <TabsTrigger 
                         value="NO_TOUCH" 
                         disabled={disabled}
-                        className="data-[state=active]:bg-teal-500 data-[state=active]:text-black font-black text-[10px] tracking-widest uppercase transition-all"
+                        className="data-[state=active]:bg-teal-500 data-[state=active]:text-black font-black text-[9px] tracking-widest uppercase transition-all"
                     >
                         No Touch
+                    </TabsTrigger>
+                    <TabsTrigger 
+                        value="TOUCH" 
+                        disabled={disabled}
+                        className="data-[state=active]:bg-teal-500 data-[state=active]:text-black font-black text-[9px] tracking-widest uppercase transition-all"
+                    >
+                        Touch
                     </TabsTrigger>
                 </TabsList>
             </Tabs>
         </div>
 
+        {/* Strategic Tuning */}
+        <div className="p-4 rounded-xl bg-teal-500/5 border border-teal-500/10 space-y-5">
+            <div className="flex items-center gap-2 mb-2">
+                <SlidersHorizontal className="w-3.5 h-3.5 text-teal-400" />
+                <span className="text-[10px] font-black uppercase tracking-widest text-teal-400">Algo Parameters</span>
+            </div>
+
+            <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">K-Multiplier</Label>
+                    <span className="text-xs font-mono font-bold text-teal-400">{settings.kMultiplier}x</span>
+                </div>
+                <Slider
+                    disabled={disabled}
+                    value={[settings.kMultiplier]}
+                    min={6}
+                    max={20}
+                    step={1}
+                    onValueChange={([v]) => update('kMultiplier', v)}
+                />
+                <p className="text-[9px] text-muted-foreground italic">Higher = Safer, further barriers</p>
+            </div>
+
+            <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">Vol-Threshold</Label>
+                    <span className="text-xs font-mono font-bold text-teal-400">{settings.volatilityThreshold}</span>
+                </div>
+                <Slider
+                    disabled={disabled}
+                    value={[settings.volatilityThreshold]}
+                    min={0.1}
+                    max={2.0}
+                    step={0.1}
+                    onValueChange={([v]) => update('volatilityThreshold', v)}
+                />
+                <p className="text-[9px] text-muted-foreground italic">Sensitivity to market movement</p>
+            </div>
+        </div>
+
+        {/* Stake & Risk */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <Label className="flex items-center gap-2">
+            <Label className="flex items-center gap-2 text-xs font-bold uppercase tracking-tighter">
               <Coins className="w-4 h-4 text-muted-foreground" />
-              Stake (USD)
+              Stake Amount
             </Label>
             <Input
               disabled={disabled}
               type="number"
               value={settings.stake}
               onChange={(e) => update('stake', Number(e.target.value))}
-              className="bg-white/5 border-white/10 w-24 h-8 text-right font-bold text-teal-400"
+              className="bg-white/5 border-white/10 w-24 h-8 text-right font-black text-teal-400"
             />
           </div>
-          <Slider
-            disabled={disabled}
-            value={[settings.stake]}
-            min={0.35}
-            max={100}
-            step={0.05}
-            onValueChange={([v]) => update('stake', v)}
-            className="py-2"
-          />
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label className="flex items-center gap-2 text-[10px] uppercase font-bold text-muted-foreground">
-              <Target className="w-3 h-3 text-green-400" />
-              Take Profit
-            </Label>
-            <Input
-              disabled={disabled}
-              type="number"
-              value={settings.takeProfit}
-              onChange={(e) => update('takeProfit', Number(e.target.value))}
-              className="bg-white/5 border-white/10 font-mono text-center"
-            />
+          
+          <div className="grid grid-cols-2 gap-3 pb-2">
+            <div className="space-y-1.5">
+                <Label className="text-[9px] uppercase font-bold text-muted-foreground flex items-center gap-1">
+                    <Target className="w-2.5 h-2.5 text-green-400" /> Take Profit
+                </Label>
+                <Input
+                    disabled={disabled}
+                    type="number"
+                    value={settings.takeProfit}
+                    onChange={(e) => update('takeProfit', Number(e.target.value))}
+                    className="bg-white/5 border-white/10 h-8 font-mono text-center text-xs"
+                />
+            </div>
+            <div className="space-y-1.5">
+                <Label className="text-[9px] uppercase font-bold text-muted-foreground flex items-center gap-1">
+                    <Octagon className="w-2.5 h-2.5 text-red-400" /> Stop Loss
+                </Label>
+                <Input
+                    disabled={disabled}
+                    type="number"
+                    value={settings.stopLoss}
+                    onChange={(e) => update('stopLoss', Number(e.target.value))}
+                    className="bg-white/5 border-white/10 h-8 font-mono text-center text-xs"
+                />
+            </div>
           </div>
-          <div className="space-y-2">
-            <Label className="flex items-center gap-2 text-[10px] uppercase font-bold text-muted-foreground">
-              <Octagon className="w-3 h-3 text-red-400" />
-              Stop Loss
-            </Label>
-            <Input
-              disabled={disabled}
-              type="number"
-              value={settings.stopLoss}
-              onChange={(e) => update('stopLoss', Number(e.target.value))}
-              className="bg-white/5 border-white/10 font-mono text-center"
-            />
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <Label className="text-xs flex items-center gap-2">
-            Market Selection
-          </Label>
-          <Select disabled={disabled} value={settings.market} onValueChange={(v) => update('market', v)}>
-            <SelectTrigger className="bg-white/5 border-white/10 h-9">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {MARKETS.map(m => (
-                <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
         </div>
 
         <div className="space-y-4 pt-4 border-t border-white/5">
-          <div className="flex items-center justify-between">
-            <Label className="flex items-center gap-2 text-xs">
-              <ShieldCheck className="w-4 h-4 text-teal-400" />
-              Barrier Offset
-            </Label>
-            <Input
-              disabled={disabled}
-              type="number"
-              step="0.1"
-              value={settings.barrierOffset}
-              onChange={(e) => update('barrierOffset', Number(e.target.value))}
-              className="bg-white/5 border-white/10 w-20 h-8 text-center font-mono"
-            />
+          <div className="space-y-1.5">
+            <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Market Venue</Label>
+            <Select disabled={disabled} value={settings.market} onValueChange={(v) => update('market', v)}>
+                <SelectTrigger className="bg-white/5 border-white/10 h-9 font-bold">
+                <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                {MARKETS.map(m => (
+                    <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                ))}
+                </SelectContent>
+            </Select>
           </div>
 
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label className="text-xs flex items-center gap-2">
-                <Repeat className="w-3 h-3 text-teal-400" />
-                Auto Market Switch
-              </Label>
-              <p className="text-[10px] text-muted-foreground">Cycle markets after loss</p>
-            </div>
-            <Switch
-              disabled={disabled}
-              checked={settings.autoSwitch}
-              onCheckedChange={(v) => update('autoSwitch', v)}
-            />
-          </div>
-
-          <div className="space-y-2">
+          <div className="space-y-3">
             <div className="flex items-center justify-between text-[10px] mb-1">
-              <Label className="flex items-center gap-2 uppercase tracking-tighter">
+              <Label className="flex items-center gap-2 uppercase tracking-tighter font-bold">
                 <Zap className="w-3 h-3 text-yellow-400" />
-                Max Trades: {settings.maxTrades}
+                Session Limit: {settings.maxTrades} trades
               </Label>
             </div>
             <Slider
