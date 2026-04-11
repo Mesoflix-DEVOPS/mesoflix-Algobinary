@@ -139,6 +139,24 @@ const queries = [
       daily_roi DECIMAL(10, 2),
       UNIQUE(tool_id, date)
     )`,
+    `CREATE TABLE IF NOT EXISTS available_avatars (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      url TEXT UNIQUE NOT NULL,
+      name VARCHAR(100),
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS user_sessions (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id VARCHAR(255) NOT NULL,
+      session_token UUID UNIQUE NOT NULL DEFAULT gen_random_uuid(),
+      device_name VARCHAR(255),
+      device_type VARCHAR(50),
+      ip_address VARCHAR(45),
+      location VARCHAR(255),
+      is_active BOOLEAN DEFAULT true,
+      last_active_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`,
     `CREATE TABLE IF NOT EXISTS trading_news (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       title VARCHAR(500) NOT NULL,

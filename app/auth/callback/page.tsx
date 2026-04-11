@@ -28,6 +28,36 @@ export default function AuthCallbackPage() {
   )
 }
 
+function getDeviceInfo() {
+    if (typeof window === "undefined") return { deviceName: "Server", deviceType: "Server" }
+    
+    const ua = navigator.userAgent;
+    let deviceName = "Unknown Device";
+    let deviceType = "Web";
+
+    if (/android/i.test(ua)) {
+        deviceName = "Android Device";
+        deviceType = "Mobile";
+    } else if (/iPad|iPhone|iPod/.test(ua)) {
+        deviceName = "iOS Device";
+        deviceType = "Mobile";
+    } else if (/Windows/.test(ua)) {
+        deviceName = "Windows PC";
+        deviceType = "Desktop";
+    } else if (/Macintosh/.test(ua)) {
+        deviceName = "MacBook / iMac";
+        deviceType = "Desktop";
+    }
+
+    // Add browser info
+    if (/Chrome/.test(ua) && !/Edge|OPR/.test(ua)) deviceName += " (Chrome)";
+    else if (/Safari/.test(ua) && !/Chrome/.test(ua)) deviceName += " (Safari)";
+    else if (/Firefox/.test(ua)) deviceName += " (Firefox)";
+    else if (/Edge/.test(ua)) deviceName += " (Edge)";
+
+    return { deviceName, deviceType };
+}
+
 function AuthCallbackContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -81,7 +111,7 @@ function AuthCallbackContent() {
         await new Promise(r => setTimeout(r, 800))
         setStep("SYNCING")
 
-        // 4. SYNCING (Save to Supabase)
+        // 4. SYNCING (Save to Supabase & Register Session)
         const userData = authResponse.authorize
         const { error: dbError } = await supabase.from("users").upsert({
           email: userData.email,
@@ -96,11 +126,33 @@ function AuthCallbackContent() {
            console.error("Supabase sync error:", dbError)
         }
 
+        // --- NEW: SESSION REGISTRATION ---
+        const { deviceName, deviceType } = getDeviceInfo()
+        const { data: sessionData, error: sessionError } = await supabase
+            .from("user_sessions")
+            .insert({
+                user_id: userData.loginid,
+                device_name: deviceName,
+                device_type: deviceType,
+                ip_address: "Client Side Detection",
+                location: "Localized"
+            })
+            .select("session_token")
+            .single()
+
+        if (sessionError) {
+            console.error("Session registration error:", sessionError)
+        }
+
         // Store session in localStorage and Cookies (for Middleware)
         localStorage.setItem("derivex_token", primaryAccount.token)
         localStorage.setItem("derivex_acct", primaryAccount.account)
         localStorage.setItem("derivex_user", JSON.stringify(userData))
         localStorage.setItem("derivex_accounts", JSON.stringify(accountList))
+        
+        if (sessionData) {
+            localStorage.setItem("derivex_session_id", sessionData.session_token)
+        }
         
         // Set cookie manually for Next.js Middleware
         document.cookie = `derivex_token=${primaryAccount.token}; path=/; max-age=604800; samesite=lax`;

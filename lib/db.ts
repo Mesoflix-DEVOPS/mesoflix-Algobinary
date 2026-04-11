@@ -130,6 +130,20 @@ async function createTables() {
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )`,
 
+    // User sessions table for multi-device tracking
+    `CREATE TABLE IF NOT EXISTS user_sessions (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id VARCHAR(255) NOT NULL,
+      session_token UUID UNIQUE NOT NULL DEFAULT gen_random_uuid(),
+      device_name VARCHAR(255),
+      device_type VARCHAR(50),
+      ip_address VARCHAR(45),
+      location VARCHAR(255),
+      is_active BOOLEAN DEFAULT true,
+      last_active_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`,
+
     // Trading news table
     `CREATE TABLE IF NOT EXISTS trading_news (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
