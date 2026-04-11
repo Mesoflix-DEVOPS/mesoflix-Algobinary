@@ -13,11 +13,11 @@ export default function DashboardLayout({
   return (
     <SessionGuard>
       <SidebarProvider>
-        <div className="flex min-h-screen w-full bg-black text-white">
+        <div className="flex h-screen max-h-screen w-full bg-black text-white overflow-hidden">
           <AppSidebar />
-          <SidebarInset className="flex flex-col flex-1 overflow-hidden bg-black border-l border-white/5">
+          <SidebarInset className="flex flex-col flex-1 overflow-hidden bg-black border-l border-white/5 relative">
             <TopNavbar />
-            <main className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar">
+            <main className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar relative">
               {children}
             </main>
           </SidebarInset>
