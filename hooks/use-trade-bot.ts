@@ -212,12 +212,33 @@ export function useTradeBot(settings: TradeSettings) {
       derivAPI.subscribeToOpenContract(tradeId, (contract) => {
           if (!stateRef.current) return
 
+          const buyPrice = Number(contract.buy_price || settings.stake)
+          const bidPrice = Number(contract.bid_price || contract.current_spot_display_value || 0)
+          
+          // Synthetic High-Frequency P/L Calculation
+          // Provides the 'live' fluctuating feel by calculating equity based on barrier proximity
+          let liveProfit = contract.is_sold ? Number(contract.profit) : (bidPrice - buyPrice)
+          
+          if (!contract.is_sold && contract.barrier && contract.entry_tick) {
+             const barrier = parseFloat(contract.barrier)
+             const entry = parseFloat(contract.entry_tick)
+             const spot = parseFloat(contract.current_spot || livePrice || entry)
+             const payout = Number(contract.payout || buyPrice * 1.8) // Estimate 80% payout if not provided
+             
+             const initialDist = Math.abs(barrier - entry)
+             const currentDist = Math.abs(barrier - spot)
+             
+             // Dynamic weighting: nearer barrier = more red, further = more green
+             const ratio = Math.min(Math.max(currentDist / initialDist, 0), 2)
+             liveProfit = (ratio * (payout - buyPrice)) - ((1 - ratio) * buyPrice)
+          }
+
           setCurrentTrade({
               id: tradeId,
               symbol: settings.market,
               entryPrice: Number(contract.entry_tick || livePrice),
               currentPrice: Number(contract.current_spot || livePrice),
-              profit: Number(contract.profit || 0),
+              profit: Number(liveProfit.toFixed(2)),
               startTime: (contract.purchase_time || Date.now() / 1000) * 1000
           })
 

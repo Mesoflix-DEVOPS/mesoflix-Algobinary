@@ -141,14 +141,19 @@ export function BotDisplay({
                 </div>
             )}
             <div className="relative z-10 text-center space-y-2">
-                <span className="text-[10px] font-black uppercase tracking-[0.4em] text-muted-foreground/60">Profit/Loss Monitor</span>
+                <span className="text-[10px] font-black uppercase tracking-[0.4em] text-muted-foreground/60">
+                    {state === 'IN_TRADE' ? "Active Trade P/L" : "Net Session ROI"}
+                </span>
                 <h2 className={cn(
                     "text-7xl sm:text-9xl font-black font-mono tracking-tighter transition-all duration-1000",
-                    isProfit ? "text-green-400 drop-shadow-[0_0_35px_rgba(74,222,128,0.3)]" : "text-red-400 drop-shadow-[0_0_35px_rgba(248,113,113,0.3)]"
+                    (state === 'IN_TRADE' ? currentTrade?.profit >= 0 : stats.profit >= 0) 
+                        ? "text-green-400 drop-shadow-[0_0_35px_rgba(74,222,128,0.3)]" 
+                        : "text-red-400 drop-shadow-[0_0_35px_rgba(248,113,113,0.3)]"
                 )}>
-                    {stats.profit >= 0 ? '+' : ''}{stats.profit.toFixed(2)}
+                    {(state === 'IN_TRADE' ? currentTrade?.profit ?? 0 : stats.profit) >= 0 ? '+' : ''}
+                    {(state === 'IN_TRADE' ? currentTrade?.profit ?? 0 : stats.profit).toFixed(2)}
                 </h2>
-                <Badge variant="outline" className="border-teal-500/20 text-teal-500 text-[10px] font-black uppercase px-4 py-1">
+                <Badge variant="outline" className="border-teal-500/20 text-teal-400 text-[10px] font-black uppercase px-4 py-1">
                     {state} • {metrics.trendDirection}
                 </Badge>
             </div>
