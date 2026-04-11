@@ -56,20 +56,27 @@ export function TopNavbar() {
   async function syncBalances(accountList: any[]) {
       if (isSyncing || accountList.length === 0) return
       setIsSyncing(true)
+      console.log(`[TopNavbar] Starting balance sync for ${accountList.length} accounts...`)
 
       const originalToken = localStorage.getItem("derivex_token")
-      const currentBalances: Record<string, string> = {}
+      const currentBalances: Record<string, string> = { ...balances }
 
       try {
           await derivAPI.connect()
           
           for (const acct of accountList) {
-              const resp = await derivAPI.authorize(acct.token)
-              if (resp.authorize) {
-                  currentBalances[acct.account] = parseFloat(resp.authorize.balance).toLocaleString(undefined, {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2
-                  })
+              try {
+                  console.log(`[TopNavbar] Authorizing account: ${acct.account}`)
+                  const resp = await derivAPI.authorize(acct.token)
+                  if (resp.authorize) {
+                      currentBalances[acct.account] = parseFloat(resp.authorize.balance).toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2
+                      })
+                      console.log(`[TopNavbar] Balance for ${acct.account}: ${resp.authorize.balance}`)
+                  }
+              } catch (acctErr) {
+                  console.error(`[TopNavbar] Failed to sync account ${acct.account}:`, acctErr)
               }
           }
 
@@ -77,12 +84,14 @@ export function TopNavbar() {
 
           // Restore original authorization
           if (originalToken) {
+              console.log("[TopNavbar] Restoring original account authorization")
               await derivAPI.authorize(originalToken)
           }
       } catch (err) {
-          console.error("Balance sync failed:", err)
+          console.error("[TopNavbar] Global balance sync failure:", err)
       } finally {
           setIsSyncing(false)
+          console.log("[TopNavbar] Balance sync complete")
       }
   }
 

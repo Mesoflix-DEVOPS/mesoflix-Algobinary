@@ -32,7 +32,7 @@ interface DerivMessage {
 class DerivAPI {
   private ws: WebSocket | null = null
   private messageId = 0
-  private responseHandlers: Map<number, (data: any) => void> = new Map()
+  private responseHandlers: Map<number, { resolve: (data: any) => void, reject: (err: any) => void }> = new Map()
   private isConnected = false
   private pingInterval: any = null
 
@@ -61,7 +61,7 @@ class DerivAPI {
             const reqId = data.req_id
             if (reqId && this.responseHandlers.has(reqId)) {
                 const handler = this.responseHandlers.get(reqId)
-                handler?.(data)
+                handler?.resolve(data)
                 this.responseHandlers.delete(reqId)
             }
           } catch (err) {
@@ -76,18 +76,21 @@ class DerivAPI {
         }
 
         this.ws.onclose = () => {
-          console.log("[DerivAPI] Socket closed. Reconnecting in 3s...")
           this.isConnected = false
-          if (this.pingInterval) clearInterval(this.pingInterval)
+          console.log("[DerivAPI] Connection closed")
           
-          // Reject all pending handlers to prevent timeouts
-          this.responseHandlers.forEach((handler) => handler({ error: { message: "Connection closed" } }))
+          // Clear all pending handlers
+          this.responseHandlers.forEach((handler) => {
+              handler.reject(new Error("Connection closed during request"))
+          })
           this.responseHandlers.clear()
           this.messageId = 0
-          this.ws = null
-          
-          // Auto-reconnect
-          setTimeout(() => this.connect(), 3000)
+
+          // Auto-reconnect after 3 seconds
+          setTimeout(() => {
+            console.log("[DerivAPI] Attempting auto-reconnect...")
+            this.connect()
+          }, 3000)
         }
       } catch (err) {
         this.isConnected = false
@@ -115,21 +118,23 @@ class DerivAPI {
       const msgId = this.messageId
       const payload = { ...message, req_id: msgId }
 
-      this.responseHandlers.set(msgId, resolve)
+      this.responseHandlers.set(msgId, { resolve, reject })
 
       try {
-        this.ws.send(JSON.stringify(payload))
-
         // Timeout after 30 seconds
         setTimeout(() => {
           if (this.responseHandlers.has(msgId)) {
             this.responseHandlers.delete(msgId)
+            console.error(`[DerivAPI] Request ${msgId} timed out:`, message)
             reject(new Error("Request timeout"))
           }
         }, 30000)
-      } catch (err) {
+
+        this.ws.send(JSON.stringify(payload))
+      } catch (error) {
+        console.error("[DerivAPI] Send error:", error)
         this.responseHandlers.delete(msgId)
-        reject(err)
+        reject(error)
       }
     })
   }

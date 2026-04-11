@@ -13,7 +13,7 @@ export default function DashboardLayout({
   return (
     <SessionGuard>
       <SidebarProvider>
-        <div className="flex h-screen max-h-screen w-full bg-black text-white overflow-hidden">
+        <div className="flex h-screen max-h-screen w-full bg-black text-white overflow-hidden relative">
           <AppSidebar />
           <SidebarInset className="flex flex-col flex-1 overflow-hidden bg-black border-l border-white/5 relative">
             <TopNavbar />
