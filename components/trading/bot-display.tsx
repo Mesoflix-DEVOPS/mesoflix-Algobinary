@@ -7,9 +7,8 @@ import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { BotState } from "@/hooks/use-trade-bot"
 import { 
-  Play, Square, XCircle, TrendingUp, TrendingDown, 
-  Activity, Timer, ShieldAlert, CheckCircle2,
-  Zap, Globe, BarChart3, Fingerprint, Radar, Unplug
+  Activity, Timer, CheckCircle2,
+  Zap, BarChart3, Fingerprint, Radar, Square, Play
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -72,9 +71,9 @@ export function BotDisplay({
   const isProfit = stats.profit >= 0
 
   return (
-    <div className="flex flex-col h-full bg-black/20 rounded-3xl border border-white/5 overflow-hidden">
-      {/* Header Diagnostic Strip - FIXED */}
-      <div className="px-6 py-4 border-b border-white/5 bg-white/[0.02] flex items-center justify-between">
+    <div className="flex flex-col bg-black/20 rounded-3xl border border-white/5 relative min-h-fit">
+      {/* Header Diagnostic Strip */}
+      <div className="px-6 py-4 border-b border-white/5 bg-black/40 backdrop-blur-md sticky top-0 z-20 rounded-t-3xl flex flex-wrap items-center justify-between gap-4">
          <div className="flex items-center gap-4">
             <div className="flex flex-col">
                 <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Active Protocol</span>
@@ -83,7 +82,7 @@ export function BotDisplay({
                     <span className="text-xs font-black text-white font-mono">{activeAcct || "DETACHED"}</span>
                 </div>
             </div>
-            <div className="w-px h-6 bg-white/10" />
+            <div className="w-px h-6 bg-white/10 hidden sm:block" />
             <div className="flex flex-col">
                 <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Market Feed</span>
                 <div className="flex items-center gap-2">
@@ -115,9 +114,8 @@ export function BotDisplay({
          </div>
       </div>
 
-      {/* Main Analysis Container - SCROLLABLE IF NEEDED */}
-      <div className="flex-1 overflow-y-auto p-6 custom-scrollbar space-y-6">
-        {/* Statistics Bench */}
+      {/* Main Analysis Sections */}
+      <div className="p-6 space-y-6">
         <div className="grid grid-cols-2 gap-4">
             <Card className="bg-white/[0.02] border-white/5 p-4 flex items-center justify-between">
                 <div className="flex flex-col">
@@ -135,111 +133,83 @@ export function BotDisplay({
             </Card>
         </div>
 
-        {/* Central ROI Terminal */}
-        <Card className={cn(
-            "relative aspect-video flex flex-col items-center justify-center border-none shadow-none bg-transparent overflow-hidden group transition-all duration-700",
-            state === 'IN_TRADE' ? (isProfit ? "scale-[1.02]" : "scale-[0.98]") : ""
-        )}>
-            {/* Background Effects */}
-            <div className="absolute inset-0 bg-gradient-to-b from-teal-500/[0.02] to-transparent pointer-events-none" />
+        {/* Central ROI Counter */}
+        <div className="relative flex flex-col items-center justify-center min-h-[240px] overflow-hidden rounded-2xl bg-gradient-to-b from-white/5 to-transparent border border-white/5">
             {state === 'SCANNING' && (
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div className="w-full h-full border border-teal-500/10 rounded-full animate-ping-slow" />
-                    <Radar className="w-32 h-32 text-teal-400/5 animate-spin-slow" />
+                <div className="absolute inset-0 flex items-center justify-center opacity-30 pointer-events-none">
+                    <Radar className="w-48 h-48 text-teal-400/20 animate-spin-slow" />
                 </div>
             )}
-
             <div className="relative z-10 text-center space-y-2">
                 <span className="text-[10px] font-black uppercase tracking-[0.4em] text-muted-foreground/60">Profit/Loss Monitor</span>
                 <h2 className={cn(
-                    "text-9xl font-black font-mono tracking-tighter transition-all duration-1000",
+                    "text-7xl sm:text-9xl font-black font-mono tracking-tighter transition-all duration-1000",
                     isProfit ? "text-green-400 drop-shadow-[0_0_35px_rgba(74,222,128,0.3)]" : "text-red-400 drop-shadow-[0_0_35px_rgba(248,113,113,0.3)]"
                 )}>
                     {stats.profit >= 0 ? '+' : ''}{stats.profit.toFixed(2)}
                 </h2>
-                <div className="flex items-center justify-center gap-4 pt-4">
-                    <Badge variant="outline" className="border-teal-500/20 text-teal-500 text-[10px] font-black uppercase tracking-widest px-4 py-1">
-                        SIDELINED {metrics.trendDirection}
-                    </Badge>
-                </div>
+                <Badge variant="outline" className="border-teal-500/20 text-teal-500 text-[10px] font-black uppercase px-4 py-1">
+                    {state} • {metrics.trendDirection}
+                </Badge>
             </div>
-        </Card>
+        </div>
 
-        {/* Active Operation Panel */}
-        <Card className="bg-black/40 border-white/5 p-6 min-h-[160px] flex flex-col justify-center relative overflow-hidden">
+        {/* Status Hub */}
+        <Card className="bg-black/40 border-white/5 p-6 min-h-[140px] flex flex-col justify-center">
             {state === 'IN_TRADE' && currentTrade ? (
-                <div className="space-y-5 animate-in fade-in zoom-in-95 duration-500">
+                <div className="space-y-5">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-teal-500/10 flex items-center justify-center border border-teal-500/20">
-                                <Zap className="w-5 h-5 text-teal-400 animate-pulse" />
-                            </div>
-                            <div className="flex flex-col">
-                                <span className="text-sm font-black text-white uppercase tracking-wider">Market Engagement</span>
-                                <span className="text-[10px] font-mono font-bold text-muted-foreground capitalize">
-                                    Targeting: SIDELINED {metrics.trendDirection}
-                                </span>
-                            </div>
+                            <Zap className="w-5 h-5 text-yellow-400 animate-pulse" />
+                            <span className="text-sm font-black text-white uppercase tracking-wider">Active Execution</span>
                         </div>
-                        <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            onClick={onCloseTrade} 
-                            className="h-8 border border-white/10 hover:bg-red-500/10 hover:text-red-400 text-[10px] font-black uppercase tracking-widest px-4"
-                        >
-                            Emergency Halt
-                        </Button>
+                        <Button variant="ghost" size="sm" onClick={onCloseTrade} className="h-7 text-[9px] font-black uppercase tracking-widest border border-white/10 hover:bg-red-500/10">Halt Trade</Button>
                     </div>
                     <div className="space-y-2">
-                        <div className="flex justify-between text-[10px] font-mono text-muted-foreground uppercase font-black">
-                            <span>Entry: ${currentTrade.entryPrice.toFixed(2)}</span>
-                            <span>Settle: {Math.max(0, Math.floor(120 - (progress * 1.2)))}s</span>
+                        <div className="flex justify-between text-[10px] font-mono font-black text-muted-foreground uppercase">
+                            <span>In: ${currentTrade.entryPrice.toFixed(2)}</span>
+                            <span>Exp: {Math.max(0, Math.floor(120 - (progress * 1.2)))}s</span>
                         </div>
                         <Progress value={progress} className="h-2 bg-white/5" indicatorClassName="bg-teal-500" />
                     </div>
                 </div>
             ) : state === 'SCANNING' ? (
-                <div className="flex flex-col items-center justify-center py-6 space-y-3">
+                <div className="flex flex-col items-center justify-center py-4 space-y-3">
                     <Radar className="w-8 h-8 text-teal-500 animate-spin-slow" />
-                    <div className="text-center">
-                        <p className="text-[10px] font-black text-teal-500 uppercase tracking-[0.3em] animate-pulse">Scanning Frequency Barriers...</p>
-                        <p className="text-[9px] text-muted-foreground uppercase font-bold tracking-widest mt-1">Watching for Sideways Convergence</p>
-                    </div>
+                    <p className="text-[10px] font-black text-teal-500 uppercase tracking-[0.3em] animate-pulse text-center">Engine Scanning Barriers...</p>
                 </div>
             ) : state === 'COOLDOWN' ? (
-                <div className="flex flex-col items-center justify-center py-6 space-y-4">
-                    <Timer className="w-8 h-8 text-blue-400 animate-pulse" />
-                    <div className="text-center">
-                        <p className="text-[10px] font-black text-blue-400 uppercase tracking-[0.3em]">Institutional Cooldown</p>
-                        <p className="text-3xl font-black font-mono text-white mt-1">{cooldownTime}s</p>
-                    </div>
+                <div className="flex flex-col items-center justify-center py-4 space-y-2 text-center">
+                   <Timer className="w-8 h-8 text-blue-400 animate-pulse" />
+                   <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Algorithm Restoring</p>
+                   <p className="text-3xl font-black font-mono text-white">{cooldownTime}s</p>
                 </div>
             ) : (
-                <div className="flex flex-col items-center justify-center py-6 space-y-3 opacity-20 group-hover:opacity-40 transition-opacity">
-                    <Fingerprint className="w-10 h-10 text-white" />
-                    <p className="text-[10px] font-black uppercase tracking-[0.5em]">System Dormant</p>
+                <div className="flex flex-col items-center justify-center py-4 opacity-30 grayscale gap-2">
+                    <Fingerprint className="w-10 h-10" />
+                    <p className="text-[10px] font-black uppercase tracking-[0.5em]">System Ready</p>
                 </div>
             )}
         </Card>
       </div>
 
-      {/* Footer Controls - FIXED PINNED */}
-      <div className="p-6 border-t border-white/5 bg-white/[0.02] backdrop-blur-md">
+      {/* Control Actions - STICKY BOTTOM FOR MOBILE */}
+      <div className="p-4 sm:p-6 sticky bottom-0 z-30 bg-black/80 backdrop-blur-xl border-t border-white/10 mt-auto rounded-b-3xl">
         {state === 'IDLE' || state === 'STOPPED' ? (
             <Button 
                 onClick={onStart} 
-                className="w-full bg-teal-500 hover:bg-teal-400 text-black h-16 text-xl font-black uppercase tracking-[0.2em] gap-3 shadow-[0_0_30px_rgba(20,184,166,0.3)] transition-all hover:scale-[1.01] active:scale-[0.99]"
+                className="w-full bg-teal-500 hover:bg-teal-400 text-black h-16 text-lg sm:text-xl font-black uppercase tracking-[0.2em] shadow-[0_0_40px_rgba(20,184,166,0.4)] transition-all active:scale-95"
             >
-                <Activity className="w-6 h-6" />
+                <Play className="w-5 h-5 mr-3 fill-current" />
                 Initialize Engine
             </Button>
         ) : (
             <Button 
                 onClick={onStop} 
                 variant="outline" 
-                className="w-full h-16 text-xl font-black uppercase tracking-[0.2em] gap-3 border-red-500/20 text-red-500 hover:bg-red-500/10 transition-all font-mono"
+                className="w-full h-16 text-lg sm:text-xl font-black uppercase tracking-[0.2em] border-red-500/30 text-red-500 hover:bg-red-500/10 transition-all active:scale-95"
             >
-                <Square className="w-6 h-6 fill-current" />
+                <Square className="w-5 h-5 mr-3 fill-current" />
                 Kill Process
             </Button>
         )}

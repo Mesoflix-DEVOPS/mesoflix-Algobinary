@@ -4,12 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Slider } from "@/components/ui/slider"
-import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { 
-  Settings2, Coins, Target, Octagon, Zap, Repeat, 
-  ArrowRightLeft, ShieldCheck, Cpu, SlidersHorizontal 
+  Settings2, Coins, Target, Octagon, Zap,
+  ArrowRightLeft, Cpu, SlidersHorizontal 
 } from "lucide-react"
 
 interface BotSettingsProps {
@@ -32,20 +31,20 @@ export function BotSettings({ settings, setSettings, disabled }: BotSettingsProp
   }
 
   return (
-    <Card className="bg-black/40 border-white/5 backdrop-blur-xl h-full flex flex-col">
+    <Card className="bg-black/40 border-white/5 backdrop-blur-xl flex flex-col min-h-fit">
       <CardHeader className="border-b border-white/5 pb-4">
         <CardTitle className="flex items-center gap-2 text-lg">
           <Cpu className="w-5 h-5 text-teal-400" />
-          Strategy Engine
+          Strategy Parameters
         </CardTitle>
-        <CardDescription>Statistical tuning & risk guardrails</CardDescription>
+        <CardDescription>Algorithmic sensitivity & Risk limits</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-6 pt-6 flex-1 overflow-y-auto custom-scrollbar pr-2">
+      <CardContent className="space-y-6 pt-6">
         {/* Mode Switcher */}
         <div className="space-y-3">
             <Label className="text-[10px] uppercase tracking-widest text-muted-foreground flex items-center gap-2 font-black">
                 <ArrowRightLeft className="w-3 h-3" />
-                Execution Logic
+                Execution Mode
             </Label>
             <Tabs 
                 value={settings.tradeMode} 
@@ -56,14 +55,14 @@ export function BotSettings({ settings, setSettings, disabled }: BotSettingsProp
                     <TabsTrigger 
                         value="NO_TOUCH" 
                         disabled={disabled}
-                        className="data-[state=active]:bg-teal-500 data-[state=active]:text-black font-black text-[9px] tracking-widest uppercase transition-all"
+                        className="data-[state=active]:bg-teal-500 data-[state=active]:text-black font-black text-[9px] tracking-widest uppercase"
                     >
                         No Touch
                     </TabsTrigger>
                     <TabsTrigger 
                         value="TOUCH" 
                         disabled={disabled}
-                        className="data-[state=active]:bg-teal-500 data-[state=active]:text-black font-black text-[9px] tracking-widest uppercase transition-all"
+                        className="data-[state=active]:bg-teal-500 data-[state=active]:text-black font-black text-[9px] tracking-widest uppercase"
                     >
                         Touch
                     </TabsTrigger>
@@ -75,7 +74,7 @@ export function BotSettings({ settings, setSettings, disabled }: BotSettingsProp
         <div className="p-4 rounded-xl bg-teal-500/5 border border-teal-500/10 space-y-5">
             <div className="flex items-center gap-2 mb-2">
                 <SlidersHorizontal className="w-3.5 h-3.5 text-teal-400" />
-                <span className="text-[10px] font-black uppercase tracking-widest text-teal-400">Algo Parameters</span>
+                <span className="text-[10px] font-black uppercase tracking-widest text-teal-400">Statistical Engine</span>
             </div>
 
             <div className="space-y-3">
@@ -91,7 +90,6 @@ export function BotSettings({ settings, setSettings, disabled }: BotSettingsProp
                     step={1}
                     onValueChange={([v]) => update('kMultiplier', v)}
                 />
-                <p className="text-[9px] text-muted-foreground italic">Higher = Safer, further barriers</p>
             </div>
 
             <div className="space-y-3">
@@ -107,16 +105,15 @@ export function BotSettings({ settings, setSettings, disabled }: BotSettingsProp
                     step={0.1}
                     onValueChange={([v]) => update('volatilityThreshold', v)}
                 />
-                <p className="text-[9px] text-muted-foreground italic">Sensitivity to market movement</p>
             </div>
         </div>
 
         {/* Stake & Risk */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <Label className="flex items-center gap-2 text-xs font-bold uppercase tracking-tighter">
-              <Coins className="w-4 h-4 text-muted-foreground" />
-              Stake Amount
+            <Label className="flex items-center gap-2 text-xs font-bold uppercase tracking-tighter text-muted-foreground">
+              <Coins className="w-4 h-4" />
+              Stake (USD)
             </Label>
             <Input
               disabled={disabled}
@@ -129,9 +126,7 @@ export function BotSettings({ settings, setSettings, disabled }: BotSettingsProp
           
           <div className="grid grid-cols-2 gap-3 pb-2">
             <div className="space-y-1.5">
-                <Label className="text-[9px] uppercase font-bold text-muted-foreground flex items-center gap-1">
-                    <Target className="w-2.5 h-2.5 text-green-400" /> Take Profit
-                </Label>
+                <Label className="text-[9px] uppercase font-bold text-muted-foreground">Take Profit</Label>
                 <Input
                     disabled={disabled}
                     type="number"
@@ -141,9 +136,7 @@ export function BotSettings({ settings, setSettings, disabled }: BotSettingsProp
                 />
             </div>
             <div className="space-y-1.5">
-                <Label className="text-[9px] uppercase font-bold text-muted-foreground flex items-center gap-1">
-                    <Octagon className="w-2.5 h-2.5 text-red-400" /> Stop Loss
-                </Label>
+                <Label className="text-[9px] uppercase font-bold text-muted-foreground">Stop Loss</Label>
                 <Input
                     disabled={disabled}
                     type="number"
@@ -157,7 +150,7 @@ export function BotSettings({ settings, setSettings, disabled }: BotSettingsProp
 
         <div className="space-y-4 pt-4 border-t border-white/5">
           <div className="space-y-1.5">
-            <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Market Venue</Label>
+            <Label className="text-[10px] font-bold uppercase text-muted-foreground">Market Venue</Label>
             <Select disabled={disabled} value={settings.market} onValueChange={(v) => update('market', v)}>
                 <SelectTrigger className="bg-white/5 border-white/10 h-9 font-bold">
                 <SelectValue />
@@ -171,12 +164,10 @@ export function BotSettings({ settings, setSettings, disabled }: BotSettingsProp
           </div>
 
           <div className="space-y-3">
-            <div className="flex items-center justify-between text-[10px] mb-1">
-              <Label className="flex items-center gap-2 uppercase tracking-tighter font-bold">
-                <Zap className="w-3 h-3 text-yellow-400" />
-                Session Limit: {settings.maxTrades} trades
-              </Label>
-            </div>
+            <Label className="flex items-center gap-2 text-[10px] uppercase font-bold text-muted-foreground">
+                <Zap className="w-3 h-3 text-yellow-500" />
+                Session Trade Limit: {settings.maxTrades}
+            </Label>
             <Slider
               disabled={disabled}
               value={[settings.maxTrades]}

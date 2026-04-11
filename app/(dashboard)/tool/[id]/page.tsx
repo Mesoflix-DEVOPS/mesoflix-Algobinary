@@ -54,13 +54,13 @@ export default function SessionTraderPage() {
   }, [toolId])
 
   return (
-    <div className="flex flex-col gap-6 h-full max-h-[calc(100vh-100px)] overflow-hidden">
+    <div className="flex flex-col gap-6 min-h-full pb-10">
       {/* Header Info */}
       <div className="flex flex-col gap-1">
         <h1 className="text-2xl font-black text-white uppercase tracking-tighter flex items-center gap-3">
             {toolName}
             <div className="px-2 py-0.5 rounded bg-teal-500/10 border border-teal-500/20 text-[10px] text-teal-400 font-black tracking-widest">
-                v2.0.1-STABLE
+                v2.1.0-MOBILE-READY
             </div>
         </h1>
         <p className="text-xs text-muted-foreground uppercase tracking-widest font-medium">
@@ -68,9 +68,9 @@ export default function SessionTraderPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 overflow-hidden">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Column - Configuration */}
-        <div className="lg:col-span-3 h-full">
+        <div className="lg:col-span-3">
             <BotSettings 
                 settings={settings} 
                 setSettings={setSettings} 
@@ -79,7 +79,7 @@ export default function SessionTraderPage() {
         </div>
 
         {/* Center Column - Display */}
-        <div className="lg:col-span-6 h-full">
+        <div className="lg:col-span-6">
             <BotDisplay 
                 state={bot.state}
                 stats={bot.stats}
@@ -95,7 +95,7 @@ export default function SessionTraderPage() {
         </div>
 
         {/* Right Column - Logs & Stats */}
-        <div className="lg:col-span-3 h-full">
+        <div className="lg:col-span-3">
             <BotLogs 
                 logs={bot.logs} 
                 stats={bot.stats} 
