@@ -5,9 +5,8 @@ import { useParams } from 'next/navigation'
 import { BotSettings } from '@/components/trading/bot-settings'
 import { BotDisplay } from '@/components/trading/bot-display'
 import { BotLogs } from '@/components/trading/bot-logs'
-import { useTradeBot } from '@/hooks/use-trade-bot'
+import { useTradeBot, TradeMode } from '@/hooks/use-trade-bot'
 import { supabase } from '@/lib/db'
-import { derivAPI } from '@/lib/deriv-api'
 
 export default function SessionTraderPage() {
   const params = useParams()
@@ -22,7 +21,9 @@ export default function SessionTraderPage() {
     cooldownTrigger: 5,
     cooldownDuration: 1,
     market: 'R_100',
-    autoSwitch: true
+    autoSwitch: true,
+    tradeMode: 'TOUCH' as TradeMode,
+    barrierOffset: 0.5
   })
 
   const bot = useTradeBot(settings)
@@ -49,11 +50,11 @@ export default function SessionTraderPage() {
         <h1 className="text-2xl font-black text-white uppercase tracking-tighter flex items-center gap-3">
             {toolName}
             <div className="px-2 py-0.5 rounded bg-teal-500/10 border border-teal-500/20 text-[10px] text-teal-400 font-black tracking-widest">
-                v1.2.0-STABLE
+                v1.5.0-TOUCH
             </div>
         </h1>
         <p className="text-xs text-muted-foreground uppercase tracking-widest font-medium">
-            Institutional Algorithm • 120s Execution Cycle
+            Touch/No Touch System • Barrier Algorithmic Execution
         </p>
       </div>
 
@@ -74,6 +75,7 @@ export default function SessionTraderPage() {
                 stats={bot.stats}
                 currentTrade={bot.currentTrade}
                 cooldownTime={bot.cooldownTime}
+                livePrice={bot.livePrice}
                 onStart={bot.startBot}
                 onStop={bot.stopBot}
                 onCloseTrade={bot.closeTrade}

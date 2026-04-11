@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { derivAPI } from '@/lib/deriv-api'
 
 export type BotState = 'IDLE' | 'RUNNING' | 'IN_TRADE' | 'COOLDOWN' | 'STOPPED'
+export type TradeMode = 'TOUCH' | 'NO_TOUCH'
 
 interface TradeSettings {
   stake: number
@@ -14,6 +15,8 @@ interface TradeSettings {
   cooldownDuration: number
   market: string
   autoSwitch: boolean
+  tradeMode: TradeMode
+  barrierOffset: number
 }
 
 interface SessionStats {
@@ -45,9 +48,10 @@ export function useTradeBot(settings: TradeSettings) {
   const [currentTrade, setCurrentTrade] = useState<CurrentTrade | null>(null)
   const [logs, setLogs] = useState<any[]>([])
   const [cooldownTime, setCooldownTime] = useState(0)
+  const [livePrice, setLivePrice] = useState<number | null>(null)
   
   const stateRef = useRef<BotState>('IDLE')
-  const statsRef = useRef(stats)
+  const tickSubId = useRef<number | null>(null)
 
   const addLog = useCallback((action: string, details: string, level: 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR' = 'INFO') => {
     setLogs(prev => [{
@@ -59,8 +63,35 @@ export function useTradeBot(settings: TradeSettings) {
     }, ...prev].slice(0, 50))
   }, [])
 
+  // Subscribe to Ticks for Live Price
+  useEffect(() => {
+    let isSubscribed = true
+    
+    const setupTickSub = async () => {
+        if (tickSubId.current) {
+            await derivAPI.unsubscribe(tickSubId.current)
+        }
+        
+        tickSubId.current = await derivAPI.subscribeToTicks(settings.market, (tick) => {
+            if (isSubscribed) {
+                setLivePrice(Number(tick.quote))
+            }
+        })
+    }
+
+    setupTickSub()
+
+    return () => {
+        isSubscribed = false
+        if (tickSubId.current) {
+            derivAPI.unsubscribe(tickSubId.current)
+            tickSubId.current = null
+        }
+    }
+  }, [settings.market])
+
   const startBot = async () => {
-    addLog('START', `Starting bot on ${settings.market}...`, 'SUCCESS')
+    addLog('START', `Starting bot on ${settings.market} (${settings.tradeMode} Mode)...`, 'SUCCESS')
     setState('RUNNING')
     stateRef.current = 'RUNNING'
   }
@@ -72,17 +103,23 @@ export function useTradeBot(settings: TradeSettings) {
   }
 
   const executeTrade = useCallback(async () => {
-    if (stateRef.current !== 'RUNNING') return
+    if (stateRef.current !== 'RUNNING' || !livePrice) return
     
     try {
-      addLog('BUY_ORDER', `Placing 2-min UP trade on ${settings.market}...`)
-      // Mock logic for MVP: Always 'UP'
+      const type = settings.tradeMode === 'TOUCH' ? 'ONETOUCH' : 'NOTOUCH'
+      // Barrier logic: For Touch, usually trend following. For No Touch, usually stable.
+      // We'll use a + offset for simplicity in this version
+      const barrier = `+${settings.barrierOffset}`
+      
+      addLog('BUY_ORDER', `Placing 2-min ${settings.tradeMode} on ${settings.market} (Barrier: ${barrier})...`)
+      
       const resp = await derivAPI.buyContract({
-        contractType: 'CALL',
+        contractType: type,
         currency: 'USD',
         amount: settings.stake,
         duration: 2,
-        symbol: settings.market
+        symbol: settings.market,
+        barrier: barrier
       })
 
       if (resp.error) {
@@ -99,10 +136,10 @@ export function useTradeBot(settings: TradeSettings) {
           setCurrentTrade({
               id: tradeId,
               symbol: settings.market,
-              entryPrice: Number(contract.entry_tick),
-              currentPrice: Number(contract.current_spot),
-              profit: Number(contract.profit),
-              startTime: contract.purchase_time * 1000
+              entryPrice: Number(contract.entry_tick || livePrice),
+              currentPrice: Number(contract.current_spot || livePrice),
+              profit: Number(contract.profit || 0),
+              startTime: (contract.purchase_time || Date.now() / 1000) * 1000
           })
 
           if (contract.is_sold) {
@@ -138,7 +175,7 @@ export function useTradeBot(settings: TradeSettings) {
       setState('RUNNING')
       stateRef.current = 'RUNNING'
     }
-  }, [settings, addLog])
+  }, [settings, livePrice, addLog])
 
   // Bot Loop Logic
   useEffect(() => {
@@ -165,11 +202,12 @@ export function useTradeBot(settings: TradeSettings) {
             addLog('COOLDOWN', `Entering cooldown for ${settings.cooldownDuration} minute...`, 'WARNING')
             setState('COOLDOWN')
             stateRef.current = 'COOLDOWN'
-            setCooldownTime(60) // Start 60s countdown
+            setCooldownTime(60)
             return
         }
 
-        // Logic to enter trade
+        // Logic to enter trade (Wait for a signal or pulse)
+        // For Week 1: Basic frequency based execution
         executeTrade()
     }
   }, [state, stats, settings, cooldownTime, executeTrade, addLog])
@@ -192,19 +230,17 @@ export function useTradeBot(settings: TradeSettings) {
     return () => clearInterval(timer)
   }, [state, cooldownTime])
 
-  // Manual timer cleared: Now relying on WebSocket is_sold
-
   return {
     state,
     stats,
     currentTrade,
     logs,
     cooldownTime,
+    livePrice,
     startBot,
     stopBot,
     closeTrade: () => {
         addLog('MANUAL_CLOSE', 'Manually closing trade...', 'WARNING')
-        // In real app, we would sell the contract here
     }
   }
 }

@@ -164,20 +164,53 @@ class DerivAPI {
     amount: number
     duration: number
     symbol: string
+    barrier?: string
   }): Promise<any> {
-    return this.send({
-      buy: {
+    const payload: any = {
+      buy: 1,
+      parameters: {
+        amount: params.amount,
+        basis: "stake",
         contract_type: params.contractType,
         currency: params.currency,
-        parameters: {
-          amount: params.amount,
-          basis: "stake",
-          duration: params.duration,
-          duration_unit: "t", // Use ticks for faster MVP testing if needed, or 'm' for 2-min
-          symbol: params.symbol,
-        },
+        duration: params.duration,
+        duration_unit: "m",
+        symbol: params.symbol,
       },
+      price: params.amount 
+    }
+
+    if (params.barrier) {
+        payload.parameters.barrier = params.barrier
+    }
+
+    return this.send(payload)
+  }
+
+  async subscribeToTicks(symbol: string, onTick: (data: any) => void): Promise<number | null> {
+    const msgId = ++this.messageId
+    this.responseHandlers.set(msgId, {
+        resolve: (data) => {
+            if (data.tick) {
+                onTick(data.tick)
+            }
+        },
+        reject: (err) => console.error("[DerivAPI] Tick subscription error:", err)
     })
+
+    this.ws?.send(JSON.stringify({
+        ticks: symbol,
+        subscribe: 1,
+        req_id: msgId
+    }))
+    return msgId
+  }
+
+  async unsubscribe(reqId: number): Promise<void> {
+    this.ws?.send(JSON.stringify({
+        forget: reqId
+    }))
+    this.responseHandlers.delete(reqId)
   }
 
   async subscribeToOpenContract(contractId: string, onUpdate: (data: any) => void): Promise<void> {
