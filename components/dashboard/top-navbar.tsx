@@ -122,6 +122,7 @@ export function TopNavbar() {
                className="hover:bg-white/5 cursor-pointer text-red-400 focus:text-red-400"
                onClick={() => {
                    localStorage.clear()
+                   document.cookie = "derivex_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
                    window.location.href = "/"
                }}
             >

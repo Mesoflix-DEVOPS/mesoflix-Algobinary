@@ -88,10 +88,13 @@ function AuthCallbackContent() {
            console.error("Supabase sync error:", dbError)
         }
 
-        // Store session in localStorage
+        // Store session in localStorage and Cookies (for Middleware)
         localStorage.setItem("derivex_token", primaryToken)
         localStorage.setItem("derivex_acct", primaryAcct)
         localStorage.setItem("derivex_user", JSON.stringify(userData))
+        
+        // Set cookie manually for Next.js Middleware
+        document.cookie = `derivex_token=${primaryToken}; path=/; max-age=604800; samesite=lax`;
 
         await new Promise(r => setTimeout(r, 800))
         setStep("FINALIZING")

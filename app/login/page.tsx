@@ -20,10 +20,10 @@ export default function LoginPage() {
             <Lock className="h-8 w-8 text-teal-500" />
           </div>
           <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">
-            Authentication <span className="text-teal-500">Coming Soon</span>
+            Derivex <span className="text-teal-500">Secure Access</span>
           </h1>
           <p className="text-lg md:text-xl text-gray-300 mb-8">
-            Secure login and account management for Derivex traders. Coming soon.
+            Connect your Deriv account to deploy high-performance automated tools and manage your trading cockpit.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center pointer-events-auto">
             <Button
