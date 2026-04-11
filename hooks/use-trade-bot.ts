@@ -110,7 +110,7 @@ export function useTradeBot(settings: TradeSettings) {
         volatility: Number(volatility.toFixed(4)),
         trendStrength: Math.round(trendStrength),
         trendDirection,
-        barrierDistance: Number(barrierDistance.toFixed(4))
+        barrierDistance: Number(barrierDistance.toFixed(2))
     }
   }, [settings.kMultiplier])
 
@@ -187,7 +187,7 @@ export function useTradeBot(settings: TradeSettings) {
     
     try {
       const type = settings.tradeMode === 'TOUCH' ? 'ONETOUCH' : 'NOTOUCH'
-      const barrier = `+${computedBarrier}`
+      const barrier = `+${computedBarrier.toFixed(2)}`
       
       addLog('ENTRY', `Strategy Met: Placing 2-min ${settings.tradeMode} (Vol: ${metrics.volatility}, Trend: ${metrics.trendDirection})`, 'SUCCESS')
       
