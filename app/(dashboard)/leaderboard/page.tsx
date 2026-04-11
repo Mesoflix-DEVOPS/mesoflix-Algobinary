@@ -18,6 +18,8 @@ import { Input } from "@/components/ui/input"
 import { supabase } from "@/lib/db"
 import { cn } from "@/lib/utils"
 
+export const dynamic = "force-dynamic"
+
 export default function LeaderboardPage() {
   const [leaderboard, setLeaderboard] = React.useState<any[]>([])
   const [isLoading, setIsLoading] = React.useState(true)

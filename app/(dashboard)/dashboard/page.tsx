@@ -19,6 +19,8 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { supabase } from "@/lib/db"
 import Link from "next/link"
 
+export const dynamic = "force-dynamic"
+
 interface Tool {
   id: string
   name: string

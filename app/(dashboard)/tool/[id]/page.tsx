@@ -24,6 +24,8 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { supabase } from "@/lib/db"
 import { cn } from "@/lib/utils"
 
+export const dynamic = "force-dynamic"
+
 export default function ToolCockpitPage() {
   const params = useParams()
   const [tool, setTool] = React.useState<any>(null)

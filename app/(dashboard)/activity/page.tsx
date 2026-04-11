@@ -19,6 +19,8 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { supabase } from "@/lib/db"
 import { cn } from "@/lib/utils"
 
+export const dynamic = "force-dynamic"
+
 export default function GlobalActivityPage() {
   const [activities, setActivities] = React.useState<any[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
