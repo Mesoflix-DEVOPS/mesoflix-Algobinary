@@ -64,37 +64,80 @@ export default function DashboardPage() {
     fetchData()
   }, [])
 
+  const isActiveDemo = user?.loginid?.startsWith('VRTC')
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       {/* A. WELCOME / STATUS CARD */}
-      <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-zinc-900 via-black to-zinc-900 border border-white/10 p-8 shadow-2xl">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-teal-500/10 blur-[120px] rounded-full -mr-20 -mt-20" />
+      <section className={cn(
+        "relative overflow-hidden rounded-3xl border p-8 shadow-2xl transition-all duration-700",
+        isActiveDemo 
+          ? "bg-gradient-to-br from-zinc-900 via-orange-950/20 to-zinc-900 border-orange-500/20 shadow-orange-500/5" 
+          : "bg-gradient-to-br from-zinc-900 via-teal-950/20 to-zinc-900 border-teal-500/20 shadow-teal-500/5"
+      )}>
+        <div className={cn(
+          "absolute top-0 right-0 w-96 h-96 blur-[120px] rounded-full -mr-20 -mt-20 transition-colors duration-700",
+          isActiveDemo ? "bg-orange-500/10" : "bg-teal-500/10"
+        )} />
+        
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-2">
-            <h1 className="text-3xl md:text-4xl font-bold text-white tracking-tight">
-              Welcome back, <span className="text-teal-400">{user?.fullname || user?.loginid || "Guest Trader"}</span>
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+                <Badge className={cn(
+                    "px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] rounded-full border",
+                    isActiveDemo 
+                        ? "bg-orange-500/10 text-orange-500 border-orange-500/20" 
+                        : "bg-teal-500/10 text-teal-500 border-teal-500/20"
+                )}>
+                    {isActiveDemo ? "Virtual Environment Active" : "Real Money Trading Mode"}
+                </Badge>
+                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-white/5 border border-white/5">
+                    <div className={cn("w-1.5 h-1.5 rounded-full animate-pulse", isActiveDemo ? "bg-orange-500" : "bg-teal-500")} />
+                    <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Live Sync</span>
+                </div>
+            </div>
+
+            <h1 className="text-3xl md:text-4xl font-black text-white tracking-tight">
+              Welcome, <span className={cn("transition-colors duration-700", isActiveDemo ? "text-orange-400" : "text-teal-400")}>
+                {user?.fullname || user?.loginid || "Guest"}
+              </span>
             </h1>
-            <p className="text-gray-400 font-medium">
-              System is operational. Your trading cockpit is ready for deployment.
-            </p>
-            <div className="flex items-center gap-4 mt-6">
+            
+            <div className="flex flex-wrap items-center gap-6 mt-6">
               <div className="flex flex-col">
-                <span className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Deriv ID</span>
-                <span className="text-sm font-mono text-white">{user?.loginid || "CR1000000"}</span>
+                <span className="text-[10px] uppercase tracking-[0.2em] text-gray-500 font-black">Contract ID</span>
+                <span className="text-sm font-bold text-white font-mono mt-1">{user?.loginid || "---"}</span>
               </div>
               <div className="w-[1px] h-8 bg-white/10" />
               <div className="flex flex-col">
-                <span className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Balance</span>
-                <span className="text-sm font-bold text-teal-400">
-                    {user?.currency || "USD"} {parseFloat(user?.balance || "0").toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                <span className="text-[10px] uppercase tracking-[0.2em] text-gray-500 font-black">Net Equity</span>
+                <span className={cn(
+                    "text-xl font-black mt-0.5 flex items-center gap-2",
+                    isActiveDemo ? "text-orange-400" : "text-teal-400"
+                )}>
+                    <span className="text-xs opacity-50 font-bold">{user?.currency || "USD"}</span>
+                    {parseFloat(user?.balance || "0").toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </span>
               </div>
             </div>
           </div>
-          <div className="flex gap-3">
-            <Button className="bg-teal-500 hover:bg-teal-600 text-black font-bold h-12 px-6 rounded-xl shadow-[0_0_20px_rgba(20,184,166,0.3)]">
+
+          <div className="flex flex-col items-center md:items-end gap-3">
+            <div className="p-4 rounded-2xl bg-white/5 border border-white/5 backdrop-blur-md flex flex-col items-center md:items-end gap-1">
+                <span className="text-[9px] font-black text-gray-500 uppercase tracking-[0.3em]">Operational Status</span>
+                <div className="flex items-center gap-2">
+                    <span className="text-sm font-bold text-white uppercase italic">Command Center Ready</span>
+                    <ShieldCheck className={cn("w-5 h-5", isActiveDemo ? "text-orange-500" : "text-teal-500")} />
+                </div>
+            </div>
+            <Button className={cn(
+                "w-full md:w-auto font-black h-12 px-8 rounded-xl shadow-2xl uppercase tracking-widest text-xs transition-all duration-300",
+                isActiveDemo 
+                    ? "bg-orange-500 hover:bg-orange-600 text-black shadow-orange-500/20" 
+                    : "bg-teal-500 hover:bg-teal-600 text-black shadow-teal-500/20"
+            )}>
               <Zap className="mr-2 w-5 h-5 fill-black" />
-              Quick Connect
+              Initialize Engine
             </Button>
           </div>
         </div>

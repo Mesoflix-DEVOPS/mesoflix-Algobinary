@@ -80,71 +80,29 @@ export function TopNavbar() {
 
   return (
     <header className="h-16 border-b border-white/5 flex items-center justify-between px-4 md:px-6 bg-black/50 backdrop-blur-xl sticky top-0 z-30">
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2 md:gap-4 shrink-0">
         <SidebarTrigger className="text-gray-400 hover:text-white" />
         <div className="h-4 w-[1px] bg-white/10 hidden md:block" />
-        <h2 className="text-sm font-semibold text-white hidden md:block tracking-wide uppercase opacity-70">
-          Command Center
-        </h2>
-      </div>
-
-      <div className="flex-1 max-w-md mx-8 hidden lg:flex items-center gap-4 bg-white/5 rounded-full px-4 py-1.5 border border-white/5 shadow-inner">
-        <div className="flex items-center gap-2 border-r border-white/10 pr-4">
-          <span className="text-[10px] font-bold text-gray-500 uppercase tracking-tighter">V75</span>
-          <span className={cn(
-            "text-sm font-mono font-bold transition-colors duration-500",
-            ticker.isUp ? "text-green-400" : "text-red-400"
-          )}>
-            {ticker.vol75}
-          </span>
-          <span className={cn(
-            "text-[10px] font-bold px-1.5 rounded",
-            ticker.isUp ? "bg-green-500/10 text-green-500" : "bg-red-500/10 text-red-500"
-          )}>
-            {ticker.change}%
-          </span>
-        </div>
-        <div className="flex-1 flex items-center gap-2 text-gray-500 transition-all group overflow-hidden">
-          <Activity className="w-3 h-3 text-teal-500 animate-pulse" />
-          <span className="text-[10px] font-medium truncate group-hover:text-gray-300">
-            Live Market Feed Active
-          </span>
-        </div>
-      </div>
-
-      <div className="flex items-center gap-2 md:gap-4">
-        <div className="hidden sm:flex flex-col items-end mr-2">
-          <span className="text-[10px] font-bold text-teal-500 uppercase tracking-widest leading-none">Status</span>
-          <span className="text-xs font-bold text-white mt-1">Operational</span>
-        </div>
-
-        <Button variant="ghost" size="icon" className="text-gray-400 hover:text-teal-400 hover:bg-white/5 relative">
-          <Bell className="w-5 h-5" />
-          <span className="absolute top-2 right-2 w-2 h-2 bg-teal-500 rounded-full border-2 border-black" />
-        </Button>
-
+        
+        {/* PROMINENT ACCOUNT SWITCHER */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="flex items-center gap-2 px-2 hover:bg-white/5">
-              <div className="w-8 h-8 rounded-full bg-teal-500/10 border border-teal-500/30 flex items-center justify-center text-teal-500 font-bold text-xs overflow-hidden">
-                {user?.fullname?.[0] || user?.loginid?.[0] || "GT"}
-              </div>
-              <ChevronDown className="w-4 h-4 text-gray-400" />
+            <Button variant="outline" className="flex items-center gap-2 px-3 h-10 bg-white/5 border-white/10 hover:bg-white/10 hover:border-teal-500/50 transition-all rounded-xl min-w-[140px] justify-start">
+               {activeAcct?.startsWith('VRTC') ? (
+                 <Badge className="bg-orange-500/20 text-orange-500 border-orange-500/30 text-[9px] font-black h-5 px-1.5 uppercase">Demo</Badge>
+               ) : (
+                 <Badge className="bg-teal-500/20 text-teal-500 border-teal-500/30 text-[9px] font-black h-5 px-1.5 uppercase">Real</Badge>
+               )}
+               <div className="flex flex-col items-start leading-none gap-0.5">
+                  <span className="text-[11px] font-bold text-white font-mono">{activeAcct}</span>
+                  <span className="text-[8px] text-gray-500 uppercase font-black tracking-widest">{user?.currency || "USD"} Wallet</span>
+               </div>
+               <ChevronDown className="w-3 h-3 text-gray-500 group-hover:text-white" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-64 bg-zinc-900 border-white/10 text-white p-2">
-            <DropdownMenuLabel className="text-xs font-bold text-gray-500 uppercase tracking-widest">Active session</DropdownMenuLabel>
-            <DropdownMenuItem className="hover:bg-white/5 cursor-pointer py-3">
-               <div className="flex flex-col">
-                  <span className="text-sm font-bold text-white">{user?.fullname || "Guest Trader"}</span>
-                  <span className="text-[10px] text-teal-500 font-mono tracking-wider">{activeAcct}</span>
-               </div>
-            </DropdownMenuItem>
-            
-            <DropdownMenuSeparator className="bg-white/5 my-2" />
-            
-            <DropdownMenuLabel className="text-xs font-bold text-gray-500 uppercase tracking-widest">Switch Account</DropdownMenuLabel>
-            <div className="max-h-[200px] overflow-y-auto px-1 py-2 custom-scrollbar space-y-1">
+          <DropdownMenuContent align="start" className="w-64 bg-zinc-950 border-white/10 text-white p-2 shadow-3xl">
+            <DropdownMenuLabel className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] mb-2 px-2">Select Active Environment</DropdownMenuLabel>
+            <div className="space-y-1 max-h-[300px] overflow-y-auto pr-1">
                 {accounts.map((acct) => {
                     const isDemo = acct.account.startsWith('VRTC');
                     const isActive = acct.account === activeAcct;
@@ -152,24 +110,24 @@ export function TopNavbar() {
                         <DropdownMenuItem 
                             key={acct.account}
                             className={cn(
-                                "cursor-pointer rounded-lg px-3 py-2 transition-all flex items-center justify-between group",
-                                isActive ? "bg-teal-500/10 border border-teal-500/20" : "hover:bg-white/5 border border-transparent"
+                                "cursor-pointer rounded-xl px-3 py-2.5 transition-all flex items-center justify-between group",
+                                isActive ? "bg-white/10 border border-white/10" : "hover:bg-teal-500/5 border border-transparent"
                             )}
                             onClick={() => handleSwitchAccount(acct)}
                         >
                             <div className="flex flex-col">
                                 <span className={cn(
                                     "text-xs font-bold",
-                                    isActive ? "text-teal-400" : "text-gray-300 group-hover:text-white"
+                                    isActive ? "text-white" : "text-gray-400 group-hover:text-white"
                                 )}>
                                     {acct.account}
                                 </span>
-                                <span className="text-[9px] text-gray-500 uppercase font-bold tracking-tighter">
+                                <span className="text-[9px] text-gray-600 font-bold uppercase tracking-widest leading-none mt-1">
                                     {acct.currency} Wallet
                                 </span>
                             </div>
                             <Badge className={cn(
-                                "text-[8px] font-bold uppercase",
+                                "text-[8px] font-black uppercase h-5",
                                 isDemo ? "bg-orange-500/10 text-orange-500 border-orange-500/20" : "bg-teal-500/10 text-teal-500 border-teal-500/20"
                             )}>
                                 {isDemo ? "Demo" : "Real"}
@@ -178,17 +136,63 @@ export function TopNavbar() {
                     )
                 })}
             </div>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
 
-            <DropdownMenuSeparator className="bg-white/5 my-2" />
-            
-            <DropdownMenuItem className="hover:bg-white/5 cursor-pointer rounded-lg">
-              Manage Profile
+      <div className="flex-1 max-w-sm mx-4 hidden xl:flex items-center gap-4 bg-white/5 rounded-full px-4 py-1.5 border border-white/5 shadow-inner">
+        <div className="flex items-center gap-2 border-r border-white/10 pr-4">
+          <span className="text-[10px] font-bold text-gray-500 uppercase tracking-tighter">V75</span>
+          <span className={cn(
+            "text-sm font-mono font-bold",
+            ticker.isUp ? "text-green-400" : "text-red-400"
+          )}>
+            {ticker.vol75}
+          </span>
+        </div>
+        <div className="flex-1 flex items-center gap-2 text-gray-500 overflow-hidden">
+          <Activity className="w-3 h-3 text-teal-500 animate-pulse shrink-0" />
+          <span className="text-[9px] font-bold uppercase tracking-widest truncate">
+            Market Feed: Operational
+          </span>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2 md:gap-4 shrink-0">
+        <div className="hidden sm:flex flex-col items-end mr-2">
+          <span className="text-[9px] font-black text-teal-500 uppercase tracking-[0.2em] leading-none">Security</span>
+          <span className="text-[11px] font-bold text-white mt-1 uppercase">Encrypted</span>
+        </div>
+
+        <Button variant="ghost" size="icon" className="text-gray-400 hover:text-teal-400 hover:bg-white/5 relative hidden md:flex">
+          <Bell className="w-5 h-5" />
+          <span className="absolute top-2 right-2 w-2 h-2 bg-teal-500 rounded-full border-2 border-black" />
+        </Button>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" className="flex items-center gap-2 px-2 hover:bg-white/5 h-10 rounded-xl">
+              <div className="w-8 h-8 rounded-lg bg-teal-500/10 border border-teal-500/30 flex items-center justify-center text-teal-500 font-bold text-xs uppercase">
+                {user?.fullname?.[0] || user?.loginid?.[0] || "GT"}
+              </div>
+              <ChevronDown className="w-4 h-4 text-gray-400 hidden sm:block" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56 bg-zinc-950 border-white/10 text-white p-2">
+            <DropdownMenuLabel className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em]">User Profile</DropdownMenuLabel>
+            <div className="py-2 px-2">
+                <p className="text-sm font-bold truncate">{user?.fullname || "Guest Trader"}</p>
+                <p className="text-[10px] text-gray-500 font-mono italic">{user?.email}</p>
+            </div>
+            <DropdownMenuSeparator className="bg-white/5" />
+            <DropdownMenuItem className="hover:bg-white/5 cursor-pointer rounded-lg text-sm font-medium">
+              Profile Settings
             </DropdownMenuItem>
             <DropdownMenuItem 
-               className="hover:bg-red-500/10 cursor-pointer text-red-400 focus:text-red-400 rounded-lg"
+               className="hover:bg-red-500/10 cursor-pointer text-red-500 focus:text-red-500 rounded-lg text-sm font-bold"
                onClick={handleLogout}
             >
-              Disconnect Session
+              Sign Out Securely
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
