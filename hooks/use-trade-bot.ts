@@ -18,6 +18,8 @@ interface TradeSettings {
   tradeMode: TradeMode
   kMultiplier: number
   volatilityThreshold: number
+  activeToken?: string
+  activeAcct?: string
 }
 
 interface SessionStats {
@@ -87,14 +89,12 @@ export function useTradeBot(settings: TradeSettings) {
     const last20 = buffer.slice(-20)
     const last10 = buffer.slice(-10)
 
-    // 1. Calculate Volatility (Avg absolute change)
     let totalChange = 0
     for (let i = 1; i < last20.length; i++) {
         totalChange += Math.abs(last20[i] - last20[i-1])
     }
     const volatility = totalChange / (last20.length - 1)
 
-    // 2. Trend Detection (Simple comparison)
     const startPrice = last10[0]
     const endPrice = last10[last10.length - 1]
     const priceChange = endPrice - startPrice
@@ -104,7 +104,6 @@ export function useTradeBot(settings: TradeSettings) {
     if (trendStrength > 30) trendDirection = 'bullish'
     else if (trendStrength < -30) trendDirection = 'bearish'
 
-    // 3. Adaptive Barrier
     const barrierDistance = volatility * settings.kMultiplier
 
     return {
@@ -122,6 +121,7 @@ export function useTradeBot(settings: TradeSettings) {
     const setupTickSub = async () => {
         if (tickSubId.current) {
             await derivAPI.unsubscribe(tickSubId.current)
+            tickSubId.current = null
         }
         
         tickSubId.current = await derivAPI.subscribeToTicks(settings.market, (tick) => {
@@ -130,13 +130,11 @@ export function useTradeBot(settings: TradeSettings) {
             const price = Number(tick.quote)
             setLivePrice(price)
             
-            // Manage Buffer
             tickBuffer.current.push(price)
             if (tickBuffer.current.length > 50) {
                 tickBuffer.current.shift()
             }
 
-            // Recalculate Metrics
             const newMetrics = analyzeMarket()
             if (newMetrics) {
                 setMetrics(newMetrics)
@@ -156,9 +154,26 @@ export function useTradeBot(settings: TradeSettings) {
   }, [settings.market, analyzeMarket])
 
   const startBot = async () => {
-    addLog('START', `StatEngine Initializing on ${settings.market}...`, 'SUCCESS')
-    setState('SCANNING')
-    stateRef.current = 'SCANNING'
+    if (!settings.activeToken) {
+        addLog('ERROR', 'No active account token found. Please connect your account.', 'ERROR')
+        return
+    }
+
+    try {
+        addLog('AUTH', `Authorizing session for account ${settings.activeAcct}...`)
+        const authResp = await derivAPI.authorize(settings.activeToken)
+        
+        if (authResp.error) {
+            addLog('ERROR', `Authorization failed: ${authResp.error.message}`, 'ERROR')
+            return
+        }
+
+        addLog('START', `StatEngine Initializing on ${settings.market}...`, 'SUCCESS')
+        setState('SCANNING')
+        stateRef.current = 'SCANNING'
+    } catch (err: any) {
+        addLog('ERROR', `Bot startup failed: ${err.message}`, 'ERROR')
+    }
   }
 
   const stopBot = () => {
@@ -195,7 +210,7 @@ export function useTradeBot(settings: TradeSettings) {
       const tradeId = resp.buy.contract_id
       
       derivAPI.subscribeToOpenContract(tradeId, (contract) => {
-          if (!stateRef.current) return // Safety
+          if (!stateRef.current) return
 
           setCurrentTrade({
               id: tradeId,
@@ -224,7 +239,7 @@ export function useTradeBot(settings: TradeSettings) {
                   }
               })
               
-              addLog(isWin ? 'SETTLED' : 'SETTLED', `Result: ${isWin ? '+' : ''}${p.toFixed(2)} on ${tradeId}`, isWin ? 'SUCCESS' : 'ERROR')
+              addLog('SETTLED', `Result: ${isWin ? '+' : ''}${p.toFixed(2)} on ${tradeId}`, isWin ? 'SUCCESS' : 'ERROR')
               setCurrentTrade(null)
               setState('SCANNING')
               stateRef.current = 'SCANNING'
@@ -244,7 +259,6 @@ export function useTradeBot(settings: TradeSettings) {
   // Decision Engine Loop
   useEffect(() => {
     if (state === 'SCANNING') {
-        // Enforce Session Stop Conditions
         if (stats.trades >= settings.maxTrades) {
             addLog('IDLE', 'Max trades reached. Ending session.', 'INFO')
             stopBot()
@@ -261,7 +275,6 @@ export function useTradeBot(settings: TradeSettings) {
             return
         }
 
-        // Check for Cooldown
         if (stats.trades > 0 && stats.trades % settings.cooldownTrigger === 0 && cooldownTime === 0) {
             addLog('COOLDOWN', `Session Cooldown: Resting for ${settings.cooldownDuration} minute...`, 'WARNING')
             setState('COOLDOWN')
@@ -270,7 +283,6 @@ export function useTradeBot(settings: TradeSettings) {
             return
         }
 
-        // --- Strategic Decision Engine ---
         if (metrics.volatility > 0) {
             const isVolatilitySafe = metrics.volatility < settings.volatilityThreshold
             const isSideways = metrics.trendDirection === 'sideways'
@@ -280,16 +292,14 @@ export function useTradeBot(settings: TradeSettings) {
                     executeTrade(metrics.barrierDistance)
                 }
             } else if (settings.tradeMode === 'TOUCH') {
-                // Advanced Touch logic: Trend + Momentum
                 if (!isSideways && metrics.volatility > settings.volatilityThreshold * 0.5) {
-                    executeTrade(metrics.barrierDistance * 0.5) // Closer barrier for touch
+                    executeTrade(metrics.barrierDistance * 0.5)
                 }
             }
         }
     }
   }, [state, stats, settings, cooldownTime, metrics, executeTrade, addLog])
 
-  // Cooldown Countdown
   useEffect(() => {
     let timer: any
     if (state === 'COOLDOWN' && cooldownTime > 0) {

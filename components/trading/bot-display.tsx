@@ -9,7 +9,7 @@ import { BotState } from "@/hooks/use-trade-bot"
 import { 
   Play, Square, XCircle, TrendingUp, TrendingDown, 
   Activity, Timer, ShieldAlert, CheckCircle2,
-  Zap, Globe, BarChart3, Fingerprint, Radar
+  Zap, Globe, BarChart3, Fingerprint, Radar, Unplug
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -20,29 +20,39 @@ interface BotDisplayProps {
   cooldownTime: number
   livePrice: number | null
   metrics: any
+  activeAcct?: string
   onStart: () => void
   onStop: () => void
   onCloseTrade: () => void
 }
 
 export function BotDisplay({ 
-  state, stats, currentTrade, cooldownTime, livePrice, metrics,
+  state, stats, currentTrade, cooldownTime, livePrice, metrics, activeAcct,
   onStart, onStop, onCloseTrade 
 }: BotDisplayProps) {
   const [progress, setProgress] = useState(0)
   const [lastPrice, setLastPrice] = useState<number | null>(null)
   const [priceColor, setPriceColor] = useState("text-white")
+  const [flash, setFlash] = useState(false)
 
   useEffect(() => {
-    if (livePrice !== null && lastPrice !== null) {
-        if (livePrice > lastPrice) setPriceColor("text-green-400")
-        else if (livePrice < lastPrice) setPriceColor("text-red-400")
-        
-        const timer = setTimeout(() => setPriceColor("text-white"), 300)
-        return () => clearTimeout(timer)
+    if (livePrice !== null) {
+        setFlash(true)
+        const flashTimer = setTimeout(() => setFlash(false), 200)
+
+        if (lastPrice !== null) {
+            if (livePrice > lastPrice) setPriceColor("text-green-400")
+            else if (livePrice < lastPrice) setPriceColor("text-red-400")
+            
+            const timer = setTimeout(() => setPriceColor("text-white"), 300)
+            return () => {
+                clearTimeout(timer)
+                clearTimeout(flashTimer)
+            }
+        }
+        setLastPrice(livePrice)
     }
-    setLastPrice(livePrice)
-  }, [livePrice, lastPrice])
+  }, [livePrice])
 
   useEffect(() => {
     let interval: any
@@ -62,178 +72,175 @@ export function BotDisplay({
   const isProfit = stats.profit >= 0
 
   return (
-    <div className="flex flex-col gap-6 h-full overflow-y-auto pr-2 custom-scrollbar">
-      {/* Live Market Analysis Header */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-         <Card className="bg-black/60 border-white/5 p-3 flex flex-col gap-1 items-center">
-            <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">Market Price</span>
-            <span className={cn("text-xl font-black font-mono transition-colors duration-200", priceColor)}>
-                {livePrice ? livePrice.toFixed(4) : "---"}
-            </span>
-         </Card>
-         <Card className="bg-black/60 border-white/5 p-3 flex flex-col gap-1 items-center">
-            <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">Volatility</span>
-            <span className={cn(
-                "text-xl font-black font-mono",
-                metrics.volatility > 0.5 ? "text-red-400" : "text-teal-400"
-            )}>
-                {metrics.volatility || "0.0000"}
-            </span>
-         </Card>
-         <Card className="bg-black/60 border-white/5 p-3 flex flex-col gap-1 items-center">
-            <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">Trend</span>
-            <Badge variant="ghost" className={cn(
-                "text-[10px] uppercase font-black tracking-tighter",
-                metrics.trendDirection === 'bullish' && "text-green-400",
-                metrics.trendDirection === 'bearish' && "text-red-400",
-                metrics.trendDirection === 'sideways' && "text-teal-400"
-            )}>
-                {metrics.trendDirection}
-            </Badge>
-         </Card>
-         <Card className="bg-black/60 border-white/5 p-3 flex flex-col gap-1 items-center">
-            <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">Barrier Calc</span>
-            <span className="text-[14px] font-black font-mono text-yellow-400">
-                ±{metrics.barrierDistance || "0.0000"}
-            </span>
-         </Card>
+    <div className="flex flex-col h-full bg-black/20 rounded-3xl border border-white/5 overflow-hidden">
+      {/* Header Diagnostic Strip - FIXED */}
+      <div className="px-6 py-4 border-b border-white/5 bg-white/[0.02] flex items-center justify-between">
+         <div className="flex items-center gap-4">
+            <div className="flex flex-col">
+                <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Active Protocol</span>
+                <div className="flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-teal-500 shadow-[0_0_8px_rgba(20,184,166,0.5)]" />
+                    <span className="text-xs font-black text-white font-mono">{activeAcct || "DETACHED"}</span>
+                </div>
+            </div>
+            <div className="w-px h-6 bg-white/10" />
+            <div className="flex flex-col">
+                <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Market Feed</span>
+                <div className="flex items-center gap-2">
+                    <Activity className={cn("w-3 h-3 transition-colors", livePrice ? "text-teal-500" : "text-red-500")} />
+                    <span className={cn("text-xs font-black font-mono", livePrice ? "text-white" : "text-red-500")}>
+                        {livePrice ? "SYNCED" : "INTERRUPTED"}
+                    </span>
+                </div>
+            </div>
+         </div>
+
+         <div className="flex items-center gap-6">
+            <div className="flex flex-col items-end">
+                <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Volatility</span>
+                <span className={cn("text-sm font-black font-mono", metrics.volatility > 0.5 ? "text-red-400" : "text-teal-400")}>
+                    {metrics.volatility.toFixed(4)}
+                </span>
+            </div>
+            <div className="flex flex-col items-end">
+                <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Live Price</span>
+                <span className={cn(
+                    "text-sm font-black font-mono transition-all duration-200",
+                    flash && "scale-110 brightness-150",
+                    priceColor
+                )}>
+                    {livePrice ? livePrice.toFixed(2) : "0.00"}
+                </span>
+            </div>
+         </div>
       </div>
 
-      {/* Main Terminal */}
-      <Card className="flex-1 bg-black/40 border-white/5 backdrop-blur-xl flex flex-col items-center justify-center p-8 relative overflow-hidden group min-h-[300px]">
-        {/* Radar Scanner Background (Active during scanning) */}
-        {state === 'SCANNING' && (
-            <div className="absolute inset-0 flex items-center justify-center opacity-20">
-                <div className="w-[400px] h-[400px] border border-teal-500/30 rounded-full animate-ping-slow" />
-                <div className="w-[300px] h-[300px] border border-teal-500/20 rounded-full animate-ping-slow delay-75" />
-                <Radar className="w-48 h-48 text-teal-400/10 animate-spin-slow" />
-            </div>
-        )}
-
-        <div className="z-10 text-center space-y-4">
-          <div className="space-y-1">
-            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground underline decoration-teal-500/50 underline-offset-4">Net Session ROI</span>
-            <h2 className={cn(
-              "text-8xl font-black font-mono tracking-tighter transition-all duration-500",
-              isProfit ? "text-green-400 drop-shadow-[0_0_40px_rgba(74,222,128,0.4)]" : "text-red-400 drop-shadow-[0_0_40px_rgba(248,113,113,0.4)]"
-            )}>
-              {stats.profit >= 0 ? '+' : ''}{stats.profit.toFixed(2)}
-            </h2>
-            <div className="flex items-center justify-center gap-2">
-                <Fingerprint className="w-3 h-3 text-white/20" />
-                <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-[0.4em]">Verified Statistical Edge</span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-10 justify-center h-16">
-             <div className="flex flex-col items-center">
-                <span className="text-[10px] font-black text-white/40 mb-1 uppercase tracking-widest">Algorithmic Efficiency</span>
-                <span className="text-2xl font-black font-mono text-white">{stats.winRate}%</span>
-             </div>
-             <div className="w-px h-8 bg-white/10" />
-             <div className="flex flex-col items-center">
-                <span className="text-[10px] font-black text-white/40 mb-1 uppercase tracking-widest">Trade Volume</span>
-                <span className="text-2xl font-black font-mono text-white">{stats.trades}</span>
-             </div>
-          </div>
+      {/* Main Analysis Container - SCROLLABLE IF NEEDED */}
+      <div className="flex-1 overflow-y-auto p-6 custom-scrollbar space-y-6">
+        {/* Statistics Bench */}
+        <div className="grid grid-cols-2 gap-4">
+            <Card className="bg-white/[0.02] border-white/5 p-4 flex items-center justify-between">
+                <div className="flex flex-col">
+                    <span className="text-[9px] font-black text-muted-foreground uppercase tracking-tighter">Win Rate</span>
+                    <span className="text-xl font-black text-white">{stats.winRate}%</span>
+                </div>
+                <BarChart3 className="w-5 h-5 text-teal-500/30" />
+            </Card>
+            <Card className="bg-white/[0.02] border-white/5 p-4 flex items-center justify-between">
+                <div className="flex flex-col">
+                    <span className="text-[9px] font-black text-muted-foreground uppercase tracking-tighter">Trades</span>
+                    <span className="text-xl font-black text-white">{stats.trades}</span>
+                </div>
+                <CheckCircle2 className="w-5 h-5 text-teal-500/30" />
+            </Card>
         </div>
 
-        {/* Diagnostic Status */}
-        <div className="absolute top-4 left-4">
-            <Badge variant="outline" className={cn(
-                "font-mono px-3 py-1 border-white/10 uppercase tracking-widest text-[10px] backdrop-blur-md",
-                state === 'SCANNING' && "text-teal-400 border-teal-400/20 bg-teal-400/5",
-                state === 'IN_TRADE' && "text-yellow-400 border-yellow-400/20 bg-yellow-400/5",
-                state === 'COOLDOWN' && "text-blue-400 border-blue-400/20 bg-blue-400/5",
-                state === 'STOPPED' && "text-red-400 border-red-400/20 bg-red-400/5",
-            )}>
-                {state === 'SCANNING' && <Radar className="w-3 h-3 mr-2 animate-spin-slow" />}
-                {state === 'IN_TRADE' && <Activity className="w-3 h-3 mr-2 animate-pulse" />}
-                {state === 'COOLDOWN' && <Timer className="w-3 h-3 mr-2" />}
-                {state === 'IDLE' && <Globe className="w-3 h-3 mr-2" />}
-                {state}
-            </Badge>
-        </div>
-      </Card>
+        {/* Central ROI Terminal */}
+        <Card className={cn(
+            "relative aspect-video flex flex-col items-center justify-center border-none shadow-none bg-transparent overflow-hidden group transition-all duration-700",
+            state === 'IN_TRADE' ? (isProfit ? "scale-[1.02]" : "scale-[0.98]") : ""
+        )}>
+            {/* Background Effects */}
+            <div className="absolute inset-0 bg-gradient-to-b from-teal-500/[0.02] to-transparent pointer-events-none" />
+            {state === 'SCANNING' && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="w-full h-full border border-teal-500/10 rounded-full animate-ping-slow" />
+                    <Radar className="w-32 h-32 text-teal-400/5 animate-spin-slow" />
+                </div>
+            )}
 
-      {/* Active Selection / Cooldown */}
-      <Card className="h-44 bg-black/40 border-white/5 backdrop-blur-xl flex flex-col justify-between overflow-hidden relative">
-        <CardContent className="p-6 h-full flex flex-col z-10">
+            <div className="relative z-10 text-center space-y-2">
+                <span className="text-[10px] font-black uppercase tracking-[0.4em] text-muted-foreground/60">Profit/Loss Monitor</span>
+                <h2 className={cn(
+                    "text-9xl font-black font-mono tracking-tighter transition-all duration-1000",
+                    isProfit ? "text-green-400 drop-shadow-[0_0_35px_rgba(74,222,128,0.3)]" : "text-red-400 drop-shadow-[0_0_35px_rgba(248,113,113,0.3)]"
+                )}>
+                    {stats.profit >= 0 ? '+' : ''}{stats.profit.toFixed(2)}
+                </h2>
+                <div className="flex items-center justify-center gap-4 pt-4">
+                    <Badge variant="outline" className="border-teal-500/20 text-teal-500 text-[10px] font-black uppercase tracking-widest px-4 py-1">
+                        SIDELINED {metrics.trendDirection}
+                    </Badge>
+                </div>
+            </div>
+        </Card>
+
+        {/* Active Operation Panel */}
+        <Card className="bg-black/40 border-white/5 p-6 min-h-[160px] flex flex-col justify-center relative overflow-hidden">
             {state === 'IN_TRADE' && currentTrade ? (
-                <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-500 h-full flex flex-col justify-between">
+                <div className="space-y-5 animate-in fade-in zoom-in-95 duration-500">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-yellow-400/10 flex items-center justify-center border border-yellow-400/20">
-                                <Zap className="w-5 h-5 text-yellow-400 animate-pulse" />
+                            <div className="w-10 h-10 rounded-xl bg-teal-500/10 flex items-center justify-center border border-teal-500/20">
+                                <Zap className="w-5 h-5 text-teal-400 animate-pulse" />
                             </div>
                             <div className="flex flex-col">
-                                <span className="text-xs font-black text-white uppercase tracking-wider">Live Execution</span>
-                                <span className={cn(
-                                    "text-[10px] font-black font-mono",
-                                    currentTrade.profit >= 0 ? "text-green-400" : "text-red-400"
-                                )}>
-                                    P/L: {currentTrade.profit >= 0 ? '+' : ''}${currentTrade.profit.toFixed(2)}
+                                <span className="text-sm font-black text-white uppercase tracking-wider">Market Engagement</span>
+                                <span className="text-[10px] font-mono font-bold text-muted-foreground capitalize">
+                                    Targeting: SIDELINED {metrics.trendDirection}
                                 </span>
                             </div>
                         </div>
+                        <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={onCloseTrade} 
+                            className="h-8 border border-white/10 hover:bg-red-500/10 hover:text-red-400 text-[10px] font-black uppercase tracking-widest px-4"
+                        >
+                            Emergency Halt
+                        </Button>
                     </div>
-
                     <div className="space-y-2">
-                        <div className="flex justify-between text-[10px] font-black font-mono text-muted-foreground px-1 uppercase tracking-widest">
-                            <span className="flex items-center gap-1.5">
-                                <div className="w-1.5 h-1.5 rounded-full bg-teal-500" />
-                                Entry: ${currentTrade.entryPrice.toFixed(4)}
-                            </span>
-                            <span className="flex items-center gap-1.5">
-                                <Timer className="w-3 h-3" />
-                                Expiry: {Math.max(0, Math.floor(120 - (progress * 1.2)))}s
-                            </span>
+                        <div className="flex justify-between text-[10px] font-mono text-muted-foreground uppercase font-black">
+                            <span>Entry: ${currentTrade.entryPrice.toFixed(2)}</span>
+                            <span>Settle: {Math.max(0, Math.floor(120 - (progress * 1.2)))}s</span>
                         </div>
                         <Progress value={progress} className="h-2 bg-white/5" indicatorClassName="bg-teal-500" />
                     </div>
                 </div>
             ) : state === 'SCANNING' ? (
-                <div className="h-full flex flex-col items-center justify-center space-y-2">
-                    <div className="flex items-center gap-4">
-                         <div className="flex flex-col items-center gap-1">
-                            <span className="text-[8px] uppercase text-muted-foreground">Vol-Level</span>
-                            <div className={cn("w-12 h-1 rounded-full", metrics.volatility < 0.5 ? "bg-green-500" : "bg-red-500")} />
-                         </div>
-                         <div className="flex flex-col items-center gap-1">
-                            <span className="text-[8px] uppercase text-muted-foreground">Trend-Stab</span>
-                            <div className={cn("w-12 h-1 rounded-full", metrics.trendDirection === 'sideways' ? "bg-green-500" : "bg-yellow-500")} />
-                         </div>
+                <div className="flex flex-col items-center justify-center py-6 space-y-3">
+                    <Radar className="w-8 h-8 text-teal-500 animate-spin-slow" />
+                    <div className="text-center">
+                        <p className="text-[10px] font-black text-teal-500 uppercase tracking-[0.3em] animate-pulse">Scanning Frequency Barriers...</p>
+                        <p className="text-[9px] text-muted-foreground uppercase font-bold tracking-widest mt-1">Watching for Sideways Convergence</p>
                     </div>
-                    <p className="text-[10px] font-black uppercase text-teal-400 animate-pulse tracking-[0.2em] pt-4">Searching for Sideways Market...</p>
                 </div>
             ) : state === 'COOLDOWN' ? (
-                <div className="h-full flex flex-col items-center justify-center space-y-4">
-                    <Timer className="w-10 h-10 text-blue-400 animate-spin-slow" />
+                <div className="flex flex-col items-center justify-center py-6 space-y-4">
+                    <Timer className="w-8 h-8 text-blue-400 animate-pulse" />
                     <div className="text-center">
-                        <p className="text-[10px] font-black text-blue-400 uppercase tracking-[0.3em]">Restoring Algorithm Integrity</p>
-                        <p className="text-3xl font-black font-mono text-white">{cooldownTime}s</p>
+                        <p className="text-[10px] font-black text-blue-400 uppercase tracking-[0.3em]">Institutional Cooldown</p>
+                        <p className="text-3xl font-black font-mono text-white mt-1">{cooldownTime}s</p>
                     </div>
                 </div>
             ) : (
-                <div className="h-full flex flex-col items-center justify-center opacity-20 grayscale">
-                    <Play className="w-8 h-8 mb-2" />
-                    <p className="text-[10px] uppercase font-black tracking-[0.2em]">Engine Dormant</p>
+                <div className="flex flex-col items-center justify-center py-6 space-y-3 opacity-20 group-hover:opacity-40 transition-opacity">
+                    <Fingerprint className="w-10 h-10 text-white" />
+                    <p className="text-[10px] font-black uppercase tracking-[0.5em]">System Dormant</p>
                 </div>
             )}
-        </CardContent>
-      </Card>
+        </Card>
+      </div>
 
-      {/* Primary Actions */}
-      <div className="flex gap-4 p-1 rounded-xl bg-white/5">
+      {/* Footer Controls - FIXED PINNED */}
+      <div className="p-6 border-t border-white/5 bg-white/[0.02] backdrop-blur-md">
         {state === 'IDLE' || state === 'STOPPED' ? (
-            <Button onClick={onStart} className="flex-1 bg-teal-500 hover:bg-teal-400 text-black h-16 text-xl font-black uppercase tracking-[0.2em] gap-3 shadow-[0_0_40px_rgba(20,184,166,0.3)] transition-all">
+            <Button 
+                onClick={onStart} 
+                className="w-full bg-teal-500 hover:bg-teal-400 text-black h-16 text-xl font-black uppercase tracking-[0.2em] gap-3 shadow-[0_0_30px_rgba(20,184,166,0.3)] transition-all hover:scale-[1.01] active:scale-[0.99]"
+            >
                 <Activity className="w-6 h-6" />
                 Initialize Engine
             </Button>
         ) : (
-            <Button onClick={onStop} variant="outline" className="flex-1 h-16 text-xl font-black uppercase tracking-[0.2em] gap-3 border-red-500/20 text-red-500 hover:bg-red-500/10 transition-all">
+            <Button 
+                onClick={onStop} 
+                variant="outline" 
+                className="w-full h-16 text-xl font-black uppercase tracking-[0.2em] gap-3 border-red-500/20 text-red-500 hover:bg-red-500/10 transition-all font-mono"
+            >
                 <Square className="w-6 h-6 fill-current" />
-                Kill Session
+                Kill Process
             </Button>
         )}
       </div>

@@ -24,8 +24,17 @@ export default function SessionTraderPage() {
     autoSwitch: true,
     tradeMode: 'NO_TOUCH' as TradeMode,
     kMultiplier: 10,
-    volatilityThreshold: 0.5
+    volatilityThreshold: 0.5,
+    activeToken: '',
+    activeAcct: ''
   })
+
+  // Sync with Global Account state
+  useEffect(() => {
+    const token = localStorage.getItem("derivex_token") || ""
+    const acct = localStorage.getItem("derivex_acct") || ""
+    setSettings(prev => ({ ...prev, activeToken: token, activeAcct: acct }))
+  }, [])
 
   const bot = useTradeBot(settings)
 
@@ -51,7 +60,7 @@ export default function SessionTraderPage() {
         <h1 className="text-2xl font-black text-white uppercase tracking-tighter flex items-center gap-3">
             {toolName}
             <div className="px-2 py-0.5 rounded bg-teal-500/10 border border-teal-500/20 text-[10px] text-teal-400 font-black tracking-widest">
-                v2.0.0-STRAT
+                v2.0.1-STABLE
             </div>
         </h1>
         <p className="text-xs text-muted-foreground uppercase tracking-widest font-medium">
@@ -78,6 +87,7 @@ export default function SessionTraderPage() {
                 cooldownTime={bot.cooldownTime}
                 livePrice={bot.livePrice}
                 metrics={bot.metrics}
+                activeAcct={settings.activeAcct}
                 onStart={bot.startBot}
                 onStop={bot.stopBot}
                 onCloseTrade={bot.closeTrade}

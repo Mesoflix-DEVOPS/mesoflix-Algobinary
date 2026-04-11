@@ -8,12 +8,12 @@ class DerivAPI {
   private ws: WebSocket | null = null
   private messageId = 0
   private responseHandlers: Map<number, { resolve: (data: any) => void, reject: (err: any) => void }> = new Map()
+  private subscriptionHandlers: Map<number, (data: any) => void> = new Map()
   private isConnected = false
   private pingInterval: any = null
   private connectionPromise: Promise<void> | null = null
 
   async connect(): Promise<void> {
-    // If we already have a connection promise, return it
     if (this.connectionPromise && (this.ws?.readyState === WebSocket.CONNECTING || this.ws?.readyState === WebSocket.OPEN)) {
         return this.connectionPromise
     }
@@ -35,10 +35,18 @@ class DerivAPI {
         this.ws.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data)
-            
             if (data.msg_type === "ping") return
             
             const reqId = data.req_id
+            
+            // 1. Check persistent subscriptions first
+            if (reqId && this.subscriptionHandlers.has(reqId)) {
+                const handler = this.subscriptionHandlers.get(reqId)
+                handler?.(data)
+                return // DO NOT DELETE persistent handlers
+            }
+
+            // 2. Check one-off responses
             if (reqId && this.responseHandlers.has(reqId)) {
                 const handler = this.responseHandlers.get(reqId)
                 handler?.resolve(data)
@@ -65,9 +73,9 @@ class DerivAPI {
               handler.reject(new Error("Connection closed during request"))
           })
           this.responseHandlers.clear()
+          this.subscriptionHandlers.clear()
           this.messageId = 0
 
-          // Auto-reconnect after 3 seconds
           setTimeout(() => {
             console.log("[DerivAPI] Attempting auto-reconnect...")
             this.connect()
@@ -85,12 +93,8 @@ class DerivAPI {
 
   private async waitForConnection(): Promise<void> {
     if (this.isConnected && this.ws?.readyState === WebSocket.OPEN) return
-    
-    if (!this.connectionPromise) {
-        await this.connect()
-    } else {
-        await this.connectionPromise
-    }
+    if (!this.connectionPromise) await this.connect()
+    else await this.connectionPromise
   }
 
   private startHeartbeat() {
@@ -174,11 +178,7 @@ class DerivAPI {
       },
       price: params.amount 
     }
-
-    if (params.barrier) {
-        payload.parameters.barrier = params.barrier
-    }
-
+    if (params.barrier) payload.parameters.barrier = params.barrier
     return this.send(payload)
   }
 
@@ -186,13 +186,8 @@ class DerivAPI {
     await this.waitForConnection()
     
     const msgId = ++this.messageId
-    this.responseHandlers.set(msgId, {
-        resolve: (data) => {
-            if (data.tick) {
-                onTick(data.tick)
-            }
-        },
-        reject: (err) => console.error("[DerivAPI] Tick subscription error:", err)
+    this.subscriptionHandlers.set(msgId, (data) => {
+        if (data.tick) onTick(data.tick)
     })
 
     this.ws?.send(JSON.stringify({
@@ -205,27 +200,21 @@ class DerivAPI {
 
   async unsubscribe(reqId: number): Promise<void> {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return
-    
-    this.ws.send(JSON.stringify({
-        forget: reqId
-    }))
-    this.responseHandlers.delete(reqId)
+    this.ws.send(JSON.stringify({ forget: reqId }))
+    this.subscriptionHandlers.delete(reqId)
   }
 
   async subscribeToOpenContract(contractId: string, onUpdate: (data: any) => void): Promise<void> {
     await this.waitForConnection()
     
     const msgId = ++this.messageId
-    this.responseHandlers.set(msgId, {
-      resolve: (data) => {
+    this.subscriptionHandlers.set(msgId, (data) => {
         if (data.proposal_open_contract) {
           onUpdate(data.proposal_open_contract)
           if (data.proposal_open_contract.is_sold) {
-            this.responseHandlers.delete(msgId)
+            this.subscriptionHandlers.delete(msgId)
           }
         }
-      },
-      reject: (err) => console.error("[DerivAPI] Subscription error:", err)
     })
 
     this.ws?.send(JSON.stringify({
