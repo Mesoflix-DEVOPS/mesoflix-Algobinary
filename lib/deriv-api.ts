@@ -4,42 +4,23 @@
 const DERIV_APP_ID = process.env.NEXT_PUBLIC_DERIV_APP_ID || "114779"
 const DERIV_API_URL = `wss://ws.derivws.com/websockets/v3?app_id=${DERIV_APP_ID}`
 
-interface DerivMessage {
-  authorize?: string
-  active_symbols?: string
-  ticks_history?: {
-    symbol: string
-    granularity?: number
-    start?: number
-    end?: number
-    count?: number
-    style?: string
-  }
-  buy?: {
-    contract_type: string
-    currency: string
-    parameters: {
-      amount: number
-      basis: string
-      duration: number
-      duration_unit: string
-      symbol: string
-      trading_period_start?: number
-    }
-  }
-}
-
 class DerivAPI {
   private ws: WebSocket | null = null
   private messageId = 0
   private responseHandlers: Map<number, { resolve: (data: any) => void, reject: (err: any) => void }> = new Map()
   private isConnected = false
   private pingInterval: any = null
+  private connectionPromise: Promise<void> | null = null
 
   async connect(): Promise<void> {
+    // If we already have a connection promise, return it
+    if (this.connectionPromise && (this.ws?.readyState === WebSocket.CONNECTING || this.ws?.readyState === WebSocket.OPEN)) {
+        return this.connectionPromise
+    }
+
     if (this.pingInterval) clearInterval(this.pingInterval)
     
-    return new Promise((resolve, reject) => {
+    this.connectionPromise = new Promise((resolve, reject) => {
       try {
         console.log("[DerivAPI] Connecting to:", DERIV_API_URL)
         this.ws = new WebSocket(DERIV_API_URL)
@@ -55,7 +36,6 @@ class DerivAPI {
           try {
             const data = JSON.parse(event.data)
             
-            // Handle Heartbeat Pong
             if (data.msg_type === "ping") return
             
             const reqId = data.req_id
@@ -72,14 +52,15 @@ class DerivAPI {
         this.ws.onerror = (error) => {
           console.error("[DerivAPI] WebSocket error:", error)
           this.isConnected = false
+          this.connectionPromise = null
           reject(error)
         }
 
         this.ws.onclose = () => {
           this.isConnected = false
+          this.connectionPromise = null
           console.log("[DerivAPI] Connection closed")
           
-          // Clear all pending handlers
           this.responseHandlers.forEach((handler) => {
               handler.reject(new Error("Connection closed during request"))
           })
@@ -94,9 +75,22 @@ class DerivAPI {
         }
       } catch (err) {
         this.isConnected = false
+        this.connectionPromise = null
         reject(err)
       }
     })
+
+    return this.connectionPromise
+  }
+
+  private async waitForConnection(): Promise<void> {
+    if (this.isConnected && this.ws?.readyState === WebSocket.OPEN) return
+    
+    if (!this.connectionPromise) {
+        await this.connect()
+    } else {
+        await this.connectionPromise
+    }
   }
 
   private startHeartbeat() {
@@ -107,10 +101,12 @@ class DerivAPI {
     }, 30000)
   }
 
-  private send(message: any): Promise<any> {
+  private async send(message: any): Promise<any> {
+    await this.waitForConnection()
+
     return new Promise((resolve, reject) => {
       if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-        reject(new Error("WebSocket not connected"))
+        reject(new Error("WebSocket not connected after waiting"))
         return
       }
 
@@ -121,7 +117,6 @@ class DerivAPI {
       this.responseHandlers.set(msgId, { resolve, reject })
 
       try {
-        // Timeout after 30 seconds
         setTimeout(() => {
           if (this.responseHandlers.has(msgId)) {
             this.responseHandlers.delete(msgId)
@@ -188,6 +183,8 @@ class DerivAPI {
   }
 
   async subscribeToTicks(symbol: string, onTick: (data: any) => void): Promise<number | null> {
+    await this.waitForConnection()
+    
     const msgId = ++this.messageId
     this.responseHandlers.set(msgId, {
         resolve: (data) => {
@@ -207,13 +204,17 @@ class DerivAPI {
   }
 
   async unsubscribe(reqId: number): Promise<void> {
-    this.ws?.send(JSON.stringify({
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return
+    
+    this.ws.send(JSON.stringify({
         forget: reqId
     }))
     this.responseHandlers.delete(reqId)
   }
 
   async subscribeToOpenContract(contractId: string, onUpdate: (data: any) => void): Promise<void> {
+    await this.waitForConnection()
+    
     const msgId = ++this.messageId
     this.responseHandlers.set(msgId, {
       resolve: (data) => {
@@ -240,6 +241,7 @@ class DerivAPI {
       if (this.pingInterval) clearInterval(this.pingInterval)
       this.ws.close()
       this.isConnected = false
+      this.connectionPromise = null
     }
   }
 }
