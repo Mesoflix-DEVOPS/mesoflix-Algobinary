@@ -38,18 +38,20 @@ function AuthCallbackContent() {
     async function processAuth() {
       try {
         // 1. EXTRACTING
-        const tokens: Record<string, string> = {}
-        const accounts: Record<string, string> = {}
+        const accountList: any[] = []
         
-        // Deriv sends back token1, acct1, token2, acct2 etc.
+        // Deriv sends back token1, acct1, cur1, token2, acct2, cur2 etc.
         let i = 1
         while (searchParams.get(`token${i}`)) {
-          tokens[`token${i}`] = searchParams.get(`token${i}`)!
-          accounts[`acct${i}`] = searchParams.get(`acct${i}`)!
+          accountList.push({
+            token: searchParams.get(`token${i}`),
+            account: searchParams.get(`acct${i}`),
+            currency: searchParams.get(`cur${i}`) || "USD"
+          })
           i++
         }
 
-        if (Object.keys(tokens).length === 0) {
+        if (accountList.length === 0) {
           throw new Error("No authorization tokens found in redirect.")
         }
 
@@ -57,15 +59,21 @@ function AuthCallbackContent() {
         setStep("CONNECTING")
 
         // 2. CONNECTING
-        await derivAPI.connect()
+        try {
+            await derivAPI.connect()
+        } catch (connErr) {
+            console.error("Connection failed, retrying...", connErr)
+            await new Promise(r => setTimeout(r, 1000))
+            await derivAPI.connect() // Simple retry
+        }
+
         await new Promise(r => setTimeout(r, 800))
         setStep("AUTHORIZING")
 
-        // 3. AUTHORIZING (Use the first account as primary)
-        const primaryToken = tokens["token1"]
-        const primaryAcct = accounts["acct1"]
+        // 3. AUTHORIZING (Use the FIRST account as primary)
+        const primaryAccount = accountList[0]
         
-        const authResponse = await derivAPI.authorize(primaryToken)
+        const authResponse = await derivAPI.authorize(primaryAccount.token)
         if (authResponse.error) {
           throw new Error(authResponse.error.message)
         }
@@ -80,7 +88,7 @@ function AuthCallbackContent() {
           username: userData.fullname || userData.loginid,
           full_name: userData.fullname,
           deriv_account_id: userData.loginid,
-          deriv_token: primaryToken,
+          deriv_token: primaryAccount.token,
           balance: userData.balance || 0,
         }, { onConflict: 'email' })
 
@@ -89,12 +97,13 @@ function AuthCallbackContent() {
         }
 
         // Store session in localStorage and Cookies (for Middleware)
-        localStorage.setItem("derivex_token", primaryToken)
-        localStorage.setItem("derivex_acct", primaryAcct)
+        localStorage.setItem("derivex_token", primaryAccount.token)
+        localStorage.setItem("derivex_acct", primaryAccount.account)
         localStorage.setItem("derivex_user", JSON.stringify(userData))
+        localStorage.setItem("derivex_accounts", JSON.stringify(accountList))
         
         // Set cookie manually for Next.js Middleware
-        document.cookie = `derivex_token=${primaryToken}; path=/; max-age=604800; samesite=lax`;
+        document.cookie = `derivex_token=${primaryAccount.token}; path=/; max-age=604800; samesite=lax`;
 
         await new Promise(r => setTimeout(r, 800))
         setStep("FINALIZING")

@@ -2,7 +2,7 @@
 // App ID: 114779
 
 const DERIV_APP_ID = process.env.NEXT_PUBLIC_DERIV_APP_ID || "114779"
-const DERIV_API_URL = "wss://ws.derivws.com/websockets/v3"
+const DERIV_API_URL = `wss://ws.derivws.com/websockets/v3?app_id=${DERIV_APP_ID}`
 
 interface DerivMessage {
   authorize?: string
