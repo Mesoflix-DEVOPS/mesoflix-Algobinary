@@ -173,11 +173,33 @@ class DerivAPI {
           amount: params.amount,
           basis: "stake",
           duration: params.duration,
-          duration_unit: "m",
+          duration_unit: "t", // Use ticks for faster MVP testing if needed, or 'm' for 2-min
           symbol: params.symbol,
         },
       },
     })
+  }
+
+  async subscribeToOpenContract(contractId: string, onUpdate: (data: any) => void): Promise<void> {
+    const msgId = ++this.messageId
+    this.responseHandlers.set(msgId, {
+      resolve: (data) => {
+        if (data.proposal_open_contract) {
+          onUpdate(data.proposal_open_contract)
+          if (data.proposal_open_contract.is_sold) {
+            this.responseHandlers.delete(msgId)
+          }
+        }
+      },
+      reject: (err) => console.error("[DerivAPI] Subscription error:", err)
+    })
+
+    this.ws?.send(JSON.stringify({
+      proposal_open_contract: 1,
+      contract_id: contractId,
+      subscribe: 1,
+      req_id: msgId
+    }))
   }
 
   disconnect(): void {
