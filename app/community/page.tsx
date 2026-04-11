@@ -1,245 +1,145 @@
 "use client"
 
-import { useRef } from "react"
 import { useRouter } from "next/navigation"
-import { Canvas, useFrame } from "@react-three/fiber"
-import { Environment, Float, Text3D } from "@react-three/drei"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Badge } from "@/components/ui/badge"
-import { Award, Share2, Star } from "lucide-react"
-import { Navigation } from "@/components/navigation"
+import { MainScene } from "@/components/main-scene"
+import { Users, Trophy, TrendingUp } from "lucide-react"
 
 export default function CommunityPage() {
   const router = useRouter()
 
+  const leaderboard = [
+    { rank: 1, name: "Alexander T.", profit: "+$48,250", winRate: "74%", trades: 456, medal: "🥇" },
+    { rank: 2, name: "Maria S.", profit: "+$42,890", winRate: "71%", trades: 398, medal: "🥈" },
+    { rank: 3, name: "John D.", profit: "+$39,450", winRate: "69%", trades: 367, medal: "🥉" },
+    { rank: 4, name: "Lisa K.", profit: "+$35,670", winRate: "67%", trades: 342, medal: "4" },
+    { rank: 5, name: "Robert M.", profit: "+$33,210", winRate: "66%", trades: 320, medal: "5" },
+    { rank: 6, name: "Emma W.", profit: "+$31,540", winRate: "65%", trades: 298, medal: "6" },
+    { rank: 7, name: "David H.", profit: "+$28,790", winRate: "63%", trades: 275, medal: "7" },
+    { rank: 8, name: "Sarah C.", profit: "+$26,340", winRate: "62%", trades: 254, medal: "8" },
+    { rank: 9, name: "Michael P.", profit: "+$24,560", winRate: "61%", trades: 235, medal: "9" },
+    { rank: 10, name: "Jennifer R.", profit: "+$22,450", winRate: "60%", trades: 218, medal: "10" },
+  ]
+
   return (
     <main className="relative w-full h-screen overflow-hidden bg-black">
       <div className="absolute inset-0 z-10">
-        <Canvas camera={{ position: [0, 0, 15], fov: 60 }}>
-          <color attach="background" args={["#050505"]} />
-          <Environment preset="city" />
-
-          <Float speed={1} rotationIntensity={0.2} floatIntensity={0.5} position={[0, 3, 0]}>
-            <Text3D
-              font="/fonts/Geist_Bold.json"
-              size={1.2}
-              height={0.2}
-              curveSegments={12}
-              bevelEnabled
-              bevelThickness={0.02}
-              bevelSize={0.02}
-              bevelOffset={0}
-              bevelSegments={5}
-            >
-              Community Hub
-              <meshStandardMaterial color="#14b8a6" metalness={0.8} roughness={0.2} />
-            </Text3D>
-          </Float>
-
-          <CommunityNetwork />
-        </Canvas>
+        <MainScene />
       </div>
 
-      <Navigation />
-
-      <div className="absolute inset-0 z-20 flex items-center justify-center p-4 pointer-events-none">
-        <div className="w-full max-w-4xl">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <Card className="bg-black/80 border-teal-500/30 backdrop-blur-md pointer-events-auto md:col-span-2">
-              <CardHeader>
-                <CardTitle className="text-xl text-white flex items-center">
-                  <Share2 className="mr-2 h-5 w-5 text-teal-500" />
-                  Strategy Marketplace
-                </CardTitle>
-                <CardDescription className="text-gray-400">
-                  Discover and share trading strategies with the community
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <StrategyCard
-                    title="Golden Cross ETF Rotator"
-                    author="Sarah K."
-                    rating={4.8}
-                    downloads={1240}
-                    tags={["Trend Following", "ETFs"]}
-                  />
-                  <StrategyCard
-                    title="Crypto Volatility Harvester"
-                    author="Michael T."
-                    rating={4.6}
-                    downloads={980}
-                    tags={["Crypto", "Volatility"]}
-                  />
-                  <StrategyCard
-                    title="Mean Reversion Scanner"
-                    author="David L."
-                    rating={4.5}
-                    downloads={750}
-                    tags={["Mean Reversion", "Stocks"]}
-                  />
-                </div>
-                <Button
-                  className="mt-4 bg-teal-500 hover:bg-teal-600 text-black font-bold"
-                  onClick={() => router.push("/studio")}
-                >
-                  Browse All Strategies
-                </Button>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-black/80 border-teal-500/30 backdrop-blur-md pointer-events-auto">
-              <CardHeader>
-                <CardTitle className="text-xl text-white flex items-center">
-                  <Award className="mr-2 h-5 w-5 text-teal-500" />
-                  Leaderboard
-                </CardTitle>
-                <CardDescription className="text-gray-400">Top performing traders this month</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <LeaderboardRow rank={1} name="Alex T." avatar="A" performance="+42.8%" />
-                  <LeaderboardRow rank={2} name="Maria S." avatar="M" performance="+38.5%" />
-                  <LeaderboardRow rank={3} name="John D." avatar="J" performance="+35.2%" />
-                  <LeaderboardRow rank={4} name="Lisa K." avatar="L" performance="+31.7%" />
-                  <LeaderboardRow rank={5} name="Robert M." avatar="R" performance="+28.9%" />
-                </div>
-                <Button variant="outline" className="mt-4 w-full border-teal-500 text-teal-500 hover:bg-teal-900/20">
-                  View Full Leaderboard
-                </Button>
-              </CardContent>
-            </Card>
+      <div className="absolute inset-0 z-20 flex flex-col items-start justify-start p-8 overflow-y-auto pointer-events-none">
+        <div className="w-full max-w-7xl mx-auto mb-8">
+          <div className="mb-4 inline-flex items-center justify-center w-12 h-12 rounded-lg bg-teal-500/10 border border-teal-500/30">
+            <Trophy className="h-6 w-6 text-teal-500" />
           </div>
+          <h1 className="text-4xl md:text-5xl font-bold text-white mb-2">
+            Global <span className="text-teal-500">Leaderboard</span>
+          </h1>
+          <p className="text-gray-400 text-lg">Top traders making the most profit with Derivex automated tools</p>
+        </div>
+
+        {/* Top 3 Showcase */}
+        <div className="w-full max-w-7xl mx-auto mb-8 pointer-events-auto">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {leaderboard.slice(0, 3).map((trader) => (
+              <div
+                key={trader.rank}
+                className={`border backdrop-blur-md rounded-lg p-6 ${
+                  trader.rank === 1
+                    ? "bg-yellow-500/10 border-yellow-500/50"
+                    : trader.rank === 2
+                      ? "bg-gray-500/10 border-gray-500/50"
+                      : "bg-orange-500/10 border-orange-500/50"
+                }`}
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <p className="text-2xl mb-2">{trader.medal}</p>
+                    <h3 className="text-xl font-bold text-white">{trader.name}</h3>
+                  </div>
+                  <TrendingUp
+                    className={`h-6 w-6 ${
+                      trader.rank === 1
+                        ? "text-yellow-500"
+                        : trader.rank === 2
+                          ? "text-gray-400"
+                          : "text-orange-500"
+                    }`}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Total Profit</span>
+                    <span className="text-green-500 font-bold">{trader.profit}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Win Rate</span>
+                    <span className="text-teal-500 font-bold">{trader.winRate}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Trades</span>
+                    <span className="text-white font-bold">{trader.trades}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Full Leaderboard Table */}
+        <div className="w-full max-w-7xl mx-auto">
+          <h2 className="text-2xl font-bold text-white mb-4">Rankings</h2>
+          <div className="bg-black/80 border border-teal-500/30 backdrop-blur-md rounded-lg overflow-hidden pointer-events-auto">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-700 bg-gray-900/50">
+                    <th className="px-6 py-4 text-left text-gray-400 font-medium">Rank</th>
+                    <th className="px-6 py-4 text-left text-gray-400 font-medium">Trader</th>
+                    <th className="px-6 py-4 text-right text-gray-400 font-medium">Total Profit</th>
+                    <th className="px-6 py-4 text-right text-gray-400 font-medium">Win Rate</th>
+                    <th className="px-6 py-4 text-right text-gray-400 font-medium">Trades</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-800">
+                  {leaderboard.slice(3).map((trader) => (
+                    <tr
+                      key={trader.rank}
+                      className="hover:bg-gray-900/50 transition"
+                    >
+                      <td className="px-6 py-4">
+                        <span className="text-lg font-bold text-white">{trader.rank}</span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="text-white font-medium">{trader.name}</span>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <span className="text-green-500 font-bold">{trader.profit}</span>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <span className="text-teal-500">{trader.winRate}</span>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <span className="text-white">{trader.trades}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div className="w-full max-w-7xl mx-auto mt-8 pointer-events-auto">
+          <Button
+            variant="outline"
+            className="border-teal-500 text-teal-500 hover:bg-teal-900/20"
+            onClick={() => router.push("/")}
+          >
+            Back to Home
+          </Button>
         </div>
       </div>
     </main>
-  )
-}
-
-function StrategyCard({ title, author, rating, downloads, tags }) {
-  return (
-    <div className="bg-gray-900/50 rounded-lg p-4 border border-gray-800">
-      <div className="flex justify-between items-start mb-2">
-        <h3 className="text-white font-medium">{title}</h3>
-        <div className="flex items-center">
-          <Star className="h-4 w-4 text-yellow-500 mr-1" />
-          <span className="text-white text-sm">{rating}</span>
-        </div>
-      </div>
-      <div className="flex items-center text-sm text-gray-400 mb-3">
-        <span>By {author}</span>
-        <span className="mx-2">•</span>
-        <span>{downloads} downloads</span>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        {tags.map((tag, index) => (
-          <Badge key={index} variant="outline" className="bg-teal-900/30 text-teal-400 border-teal-800">
-            {tag}
-          </Badge>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-function LeaderboardRow({ rank, name, avatar, performance }) {
-  return (
-    <div className="flex items-center justify-between">
-      <div className="flex items-center">
-        <div
-          className={`w-6 h-6 rounded-full flex items-center justify-center mr-3 text-sm font-bold ${
-            rank === 1
-              ? "bg-yellow-500 text-black"
-              : rank === 2
-                ? "bg-gray-400 text-black"
-                : rank === 3
-                  ? "bg-amber-700 text-white"
-                  : "bg-gray-700 text-white"
-          }`}
-        >
-          {rank}
-        </div>
-        <Avatar className="h-8 w-8 mr-2">
-          <AvatarFallback className="bg-teal-900 text-teal-400">{avatar}</AvatarFallback>
-        </Avatar>
-        <span className="text-white">{name}</span>
-      </div>
-      <span className="text-green-500 font-medium">{performance}</span>
-    </div>
-  )
-}
-
-function CommunityNetwork() {
-  const networkRef = useRef()
-
-  useFrame(({ clock }) => {
-    if (networkRef.current) {
-      networkRef.current.rotation.y = clock.getElapsedTime() * 0.1
-    }
-  })
-
-  // Create a network of nodes representing community members
-  const nodes = []
-  const connections = []
-  const nodeCount = 30
-
-  for (let i = 0; i < nodeCount; i++) {
-    // Create a spherical distribution of nodes
-    const phi = Math.acos(-1 + (2 * i) / nodeCount)
-    const theta = Math.sqrt(nodeCount * Math.PI) * phi
-
-    const x = 8 * Math.sin(phi) * Math.cos(theta)
-    const y = 8 * Math.sin(phi) * Math.sin(theta)
-    const z = 8 * Math.cos(phi)
-
-    const size = 0.2 + Math.random() * 0.3
-    const color = Math.random() > 0.8 ? "#14b8a6" : "#f0f0f0"
-
-    nodes.push(
-      <mesh key={`node-${i}`} position={[x, y, z]}>
-        <sphereGeometry args={[size, 16, 16]} />
-        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.5} />
-      </mesh>,
-    )
-
-    // Create connections between some nodes
-    if (i > 0 && Math.random() > 0.7) {
-      const targetIndex = Math.floor(Math.random() * i)
-      const targetPhi = Math.acos(-1 + (2 * targetIndex) / nodeCount)
-      const targetTheta = Math.sqrt(nodeCount * Math.PI) * targetPhi
-
-      const targetX = 8 * Math.sin(targetPhi) * Math.cos(targetTheta)
-      const targetY = 8 * Math.sin(targetPhi) * Math.sin(targetTheta)
-      const targetZ = 8 * Math.cos(targetPhi)
-
-      connections.push(
-        <mesh key={`connection-${i}-${targetIndex}`}>
-          <cylinderGeometry
-            args={[
-              0.03,
-              0.03,
-              Math.sqrt(Math.pow(x - targetX, 2) + Math.pow(y - targetY, 2) + Math.pow(z - targetZ, 2)),
-              8,
-            ]}
-            position={[(x + targetX) / 2, (y + targetY) / 2, (z + targetZ) / 2]}
-            rotation={[
-              Math.atan2(Math.sqrt(Math.pow(x - targetX, 2) + Math.pow(z - targetZ, 2)), y - targetY),
-              Math.atan2(z - targetZ, x - targetX),
-              0,
-            ]}
-          />
-          <meshStandardMaterial color="#14b8a6" emissive="#14b8a6" emissiveIntensity={0.5} transparent opacity={0.3} />
-        </mesh>,
-      )
-    }
-  }
-
-  return (
-    <group ref={networkRef}>
-      {nodes}
-      {connections}
-    </group>
   )
 }
