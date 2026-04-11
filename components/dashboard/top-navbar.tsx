@@ -172,8 +172,12 @@ export function TopNavbar() {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="flex items-center gap-2 px-2 hover:bg-white/5 h-10 rounded-xl">
-              <div className="w-8 h-8 rounded-lg bg-teal-500/10 border border-teal-500/30 flex items-center justify-center text-teal-500 font-bold text-xs uppercase">
-                {user?.fullname?.[0] || user?.loginid?.[0] || "GT"}
+              <div className="w-8 h-8 rounded-lg bg-teal-500/10 border border-teal-500/30 flex items-center justify-center text-teal-500 font-bold text-xs uppercase overflow-hidden">
+                {user?.avatar_url ? (
+                    <img src={user.avatar_url} alt="Profile" className="w-full h-full object-cover" />
+                ) : (
+                    user?.fullname?.[0] || user?.loginid?.[0] || "GT"
+                )}
               </div>
               <ChevronDown className="w-4 h-4 text-gray-400 hidden sm:block" />
             </Button>

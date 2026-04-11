@@ -200,8 +200,12 @@ export function AppSidebar() {
 
       <SidebarFooter className="border-t border-white/5 p-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-teal-500 to-blue-500 flex items-center justify-center text-black font-bold border-2 border-white/10 ring-2 ring-teal-500/20">
-            {user?.fullname?.[0] || user?.loginid?.[0] || "GT"}
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-teal-500/20 to-blue-500/20 flex items-center justify-center text-teal-400 font-bold border-2 border-white/10 ring-2 ring-teal-500/10 overflow-hidden">
+            {user?.avatar_url ? (
+                <img src={user.avatar_url} alt="Profile" className="w-full h-full object-cover" />
+            ) : (
+                user?.fullname?.[0] || user?.loginid?.[0] || "GT"
+            )}
           </div>
           {state === "expanded" && (
             <div className="flex flex-col min-w-0">

@@ -22,13 +22,42 @@ export const dynamic = 'force-dynamic'
 
 export default function SettingsPage() {
   const [user, setUser] = React.useState<any>(null)
+  const [avatars, setAvatars] = React.useState<any[]>([])
+  const [isSaving, setIsSaving] = React.useState(false)
 
   React.useEffect(() => {
     const storedUser = localStorage.getItem("derivex_user")
     if (storedUser) {
       setUser(JSON.parse(storedUser))
     }
+
+    async function fetchAvatars() {
+      const { data } = await supabase.from("available_avatars").select("*").order("name")
+      if (data) setAvatars(data)
+    }
+    fetchAvatars()
   }, [])
+
+  const handleUpdateAvatar = async (url: string) => {
+    if (!user) return
+    setIsSaving(true)
+    try {
+        const { error } = await supabase
+            .from("users")
+            .update({ avatar_url: url })
+            .eq("id", user.id)
+
+        if (!error) {
+            const updatedUser = { ...user, avatar_url: url }
+            localStorage.setItem("derivex_user", JSON.stringify(updatedUser))
+            setUser(updatedUser)
+        }
+    } catch (err) {
+        console.error("Failed to update avatar:", err)
+    } finally {
+        setIsSaving(false)
+    }
+  }
 
   const handleLogout = () => {
     localStorage.clear()
@@ -45,51 +74,73 @@ export default function SettingsPage() {
 
       <div className="grid gap-8 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-8">
-          {/* Profile Section */}
+          {/* Identity & Avatar Section */}
           <div className="bg-zinc-900/50 border border-white/5 rounded-2xl overflow-hidden shadow-2xl">
             <div className="p-6 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
               <div className="flex items-center gap-4">
                 <div className="w-10 h-10 rounded-xl bg-teal-500/10 flex items-center justify-center text-teal-400">
                   <User className="w-5 h-5" />
                 </div>
-                <h3 className="font-bold text-white uppercase tracking-widest text-sm">Account Identity</h3>
+                <h3 className="font-bold text-white uppercase tracking-widest text-sm">Identity Console</h3>
               </div>
               <Badge variant="outline" className="bg-teal-500/10 text-teal-400 border-teal-500/20">
-                Authorized
+                Lvl 1 Verified
               </Badge>
             </div>
-            <div className="p-6 space-y-6">
-              <div className="grid sm:grid-cols-2 gap-6">
-                <div className="space-y-1.5">
-                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Full Name</span>
-                  <p className="text-white font-medium">{user?.fullname || "Guest Trader"}</p>
+            <div className="p-6 space-y-8">
+              {/* CURRENT PROFILE */}
+              <div className="flex items-center gap-6">
+                <div className="relative group">
+                    <div className="w-24 h-24 rounded-2xl bg-teal-500/20 border-2 border-teal-500/30 overflow-hidden shadow-[0_0_30px_rgba(20,184,166,0.2)]">
+                        {user?.avatar_url ? (
+                            <img src={user.avatar_url} alt="Profile" className="w-full h-full object-cover" />
+                        ) : (
+                            <div className="w-full h-full flex items-center justify-center text-3xl font-black text-teal-500">
+                                {user?.fullname?.[0] || user?.loginid?.[0] || "?"}
+                            </div>
+                        )}
+                    </div>
+                    {isSaving && (
+                        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center rounded-2xl">
+                            <Loader2 className="w-6 h-6 text-teal-500 animate-spin" />
+                        </div>
+                    )}
                 </div>
-                <div className="space-y-1.5">
-                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Login ID</span>
-                  <p className="text-white font-mono font-medium">{user?.loginid || "CR1000000"}</p>
-                </div>
-                <div className="space-y-1.5">
-                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Email Address</span>
-                  <p className="text-white font-medium">{user?.email || "guest@mesoflix.com"}</p>
-                </div>
-                <div className="space-y-1.5">
-                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Verification Status</span>
-                  <div className="flex items-center gap-1.5 text-teal-400">
-                    <BadgeCheck className="w-4 h-4" />
-                    <span className="text-sm font-bold">Verified Level 1</span>
-                  </div>
+                <div>
+                   <h4 className="text-xl font-bold text-white leading-tight">{user?.fullname || "Guest Trader"}</h4>
+                   <p className="text-sm text-gray-500 font-mono mt-1">{user?.loginid || "---"}</p>
+                   <p className="text-xs text-teal-500/70 font-bold uppercase tracking-widest mt-2">Active Deployment Identity</p>
                 </div>
               </div>
+
               <Separator className="bg-white/5" />
-              <div className="flex items-center justify-between gap-4">
-                <p className="text-xs text-gray-500 max-w-sm">
-                  These details are provided by your Deriv account. To change them, visit the Deriv portal.
-                </p>
-                <Button variant="outline" className="border-white/10 text-gray-400 hover:bg-white/5 gap-2" asChild>
-                  <a href="https://app.deriv.com/account/personal-details" target="_blank" rel="noopener noreferrer">
-                    Visit Deriv <ExternalLink className="w-3 h-3" />
-                  </a>
-                </Button>
+
+              {/* AVATAR LIBRARY */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h4 className="text-sm font-bold text-white uppercase tracking-widest">Avatar Selection Library</h4>
+                        <p className="text-xs text-gray-500 mt-1">Select an institutional identity from the 50-unit collection.</p>
+                    </div>
+                </div>
+                <div className="grid grid-cols-5 sm:grid-cols-10 gap-2 max-h-[300px] overflow-y-auto p-4 bg-black/40 rounded-2xl border border-white/5 custom-scrollbar">
+                    {avatars.map((av) => (
+                        <button 
+                            key={av.id}
+                            className={cn(
+                                "aspect-square rounded-xl overflow-hidden border-2 transition-all hover:scale-110 active:scale-95",
+                                user?.avatar_url === av.url ? "border-teal-500 shadow-[0_0_15px_rgba(20,184,166,0.3)] bg-teal-500/10" : "border-white/10 hover:border-white/30 bg-white/5"
+                            )}
+                            onClick={() => handleUpdateAvatar(av.url)}
+                            disabled={isSaving}
+                        >
+                            <img src={av.url} alt={av.name} className="w-full h-full object-cover" />
+                        </button>
+                    ))}
+                    {avatars.length === 0 && Array.from({ length: 20 }).map((_, i) => (
+                        <div key={i} className="aspect-square rounded-xl bg-white/5 animate-pulse" />
+                    ))}
+                </div>
               </div>
             </div>
           </div>

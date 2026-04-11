@@ -122,6 +122,14 @@ async function createTables() {
       UNIQUE(tool_id, date)
     )`,
 
+    // Available avatars table
+    `CREATE TABLE IF NOT EXISTS available_avatars (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      url TEXT UNIQUE NOT NULL,
+      name VARCHAR(100),
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`,
+
     // Trading news table
     `CREATE TABLE IF NOT EXISTS trading_news (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -141,5 +149,38 @@ async function createTables() {
     } catch (err) {
       console.error("[v0] Table creation error:", err)
     }
+  }
+
+  // Seed avatars if table is empty
+  await seedAvatars()
+}
+
+async function seedAvatars() {
+  try {
+    const { count } = await supabase.from("available_avatars").select("id", { count: "exact", head: true })
+    
+    if (count === 0) {
+      console.log("[v0] Seeding Avatar Library...")
+      const avatars = []
+      
+      // Generate 50 unique DiceBear avatars (Pixel Art & Bottts)
+      for (let i = 1; i <= 25; i++) {
+        avatars.push({
+          url: `https://api.dicebear.com/7.x/pixel-art/svg?seed=Avatar${i}`,
+          name: `Pixel Unit ${i}`
+        })
+      }
+      for (let i = 1; i <= 25; i++) {
+        avatars.push({
+          url: `https://api.dicebear.com/7.x/bottts/svg?seed=Bot${i}`,
+          name: `Automata ${i}`
+        })
+      }
+
+      const { error } = await supabase.from("available_avatars").insert(avatars)
+      if (error) console.error("[v0] Seeding error:", error)
+    }
+  } catch (err) {
+    console.error("[v0] Avatar seeding failed:", err)
   }
 }
