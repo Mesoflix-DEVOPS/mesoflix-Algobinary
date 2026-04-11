@@ -1,6 +1,5 @@
 import type React from "react"
 import "@/app/globals.css"
-import { ThemeProvider } from "@/components/theme-provider"
 
 export const metadata = {
   title: "AlgoSensei - No-Code Trading Strategy Builder",
@@ -15,11 +14,9 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
+    <html lang="en" className="dark">
       <body className="bg-black">
-        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
-          {children}
-        </ThemeProvider>
+        {children}
       </body>
     </html>
   )

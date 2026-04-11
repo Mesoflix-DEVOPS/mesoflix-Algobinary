@@ -2,7 +2,7 @@
 
 import { useRef, useState, useEffect } from "react"
 import { Canvas, useFrame, useThree } from "@react-three/fiber"
-import { Environment, OrbitControls, Float, Text3D, Sphere, MeshDistortMaterial } from "@react-three/drei"
+import { Environment, OrbitControls, Float, Sphere, MeshDistortMaterial } from "@react-three/drei"
 import type { Group } from "three"
 
 export function MainScene() {
@@ -45,37 +45,15 @@ function Logo({ position }: { position: [number, number, number] }) {
 
   return (
     <group ref={groupRef} position={position}>
-      <Text3D
-        font="/fonts/Geist_Bold.json"
-        size={1.5}
-        height={0.2}
-        curveSegments={12}
-        bevelEnabled
-        bevelThickness={0.02}
-        bevelSize={0.02}
-        bevelOffset={0}
-        bevelSegments={5}
-        position={[-4.5, 0, 0]}
-      >
-        Algo
-        <meshStandardMaterial color="#14b8a6" metalness={0.8} roughness={0.2} />
-      </Text3D>
-
-      <Text3D
-        font="/fonts/Geist_Bold.json"
-        size={1.5}
-        height={0.2}
-        curveSegments={12}
-        bevelEnabled
-        bevelThickness={0.02}
-        bevelSize={0.02}
-        bevelOffset={0}
-        bevelSegments={5}
-        position={[0.2, 0, 0]}
-      >
-        Sensei
-        <meshStandardMaterial color="#f0f0f0" metalness={0.8} roughness={0.2} />
-      </Text3D>
+      <mesh position={[-1.5, 0, 0]} scale={0.8}>
+        <boxGeometry args={[1.5, 1.5, 1.5]} />
+        <meshStandardMaterial color="#14b8a6" metalness={0.8} roughness={0.2} wireframe />
+      </mesh>
+      
+      <mesh position={[1.5, 0, 0]} scale={0.8}>
+        <octahedronGeometry args={[1, 2]} />
+        <meshStandardMaterial color="#f0f0f0" metalness={0.8} roughness={0.2} wireframe />
+      </mesh>
     </group>
   )
 }
