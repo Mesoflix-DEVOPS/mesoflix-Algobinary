@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { supabase } from "@/lib/db"
+import { cn } from "@/lib/utils"
 import Link from "next/link"
 
 export const dynamic = "force-dynamic"

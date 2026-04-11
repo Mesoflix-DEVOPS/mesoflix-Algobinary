@@ -11,12 +11,15 @@ import {
   ChevronRight,
   BadgeCheck,
   Smartphone,
-  CreditCard
+  CreditCard,
+  Loader2
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
+import { supabase } from "@/lib/db"
+import { cn } from "@/lib/utils"
 
 export const dynamic = 'force-dynamic'
 
