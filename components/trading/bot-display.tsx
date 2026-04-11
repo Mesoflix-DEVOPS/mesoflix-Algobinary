@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { BotState } from "@/hooks/use-trade-bot"
 import { 
   Activity, Timer, CheckCircle2,
-  Zap, BarChart3, Fingerprint, Radar, Square, Play
+  Zap, BarChart3, Fingerprint, Radar, Square, Play, XCircle
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
