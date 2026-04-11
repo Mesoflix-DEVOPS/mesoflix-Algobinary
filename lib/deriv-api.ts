@@ -79,6 +79,11 @@ class DerivAPI {
           console.log("[DerivAPI] Socket closed. Reconnecting in 3s...")
           this.isConnected = false
           if (this.pingInterval) clearInterval(this.pingInterval)
+          
+          // Reject all pending handlers to prevent timeouts
+          this.responseHandlers.forEach((handler) => handler({ error: { message: "Connection closed" } }))
+          this.responseHandlers.clear()
+          this.messageId = 0
           this.ws = null
           
           // Auto-reconnect
