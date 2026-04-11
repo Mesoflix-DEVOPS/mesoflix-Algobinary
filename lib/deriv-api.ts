@@ -34,8 +34,11 @@ class DerivAPI {
   private messageId = 0
   private responseHandlers: Map<number, (data: any) => void> = new Map()
   private isConnected = false
+  private pingInterval: any = null
 
   async connect(): Promise<void> {
+    if (this.pingInterval) clearInterval(this.pingInterval)
+    
     return new Promise((resolve, reject) => {
       try {
         this.ws = new WebSocket(DERIV_API_URL)
@@ -43,23 +46,27 @@ class DerivAPI {
         this.ws.onopen = () => {
           console.log("[v0] Connected to Deriv API")
           this.isConnected = true
+          this.startHeartbeat()
           resolve()
         }
 
         this.ws.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data)
+            
+            // Handle Heartbeat Pong
+            if (data.msg_type === "ping") return
+            
             const reqId = data.req_id
-
             if (reqId && this.responseHandlers.has(reqId)) {
-              const handler = this.responseHandlers.get(reqId)
-              handler?.(data)
-              this.responseHandlers.delete(reqId)
+                const handler = this.responseHandlers.get(reqId)
+                handler?.(data)
+                this.responseHandlers.delete(reqId)
             }
 
             // Handle subscription messages
             if (data.tick || data.candles) {
-              console.log("[v0] Market data received:", data)
+                // Silently handle market data
             }
           } catch (err) {
             console.error("[v0] Error parsing Deriv message:", err)
@@ -72,13 +79,25 @@ class DerivAPI {
         }
 
         this.ws.onclose = () => {
-          console.log("[v0] Disconnected from Deriv API")
+          console.log("[v0] Disconnected from Deriv API. Reconnecting...")
           this.isConnected = false
+          if (this.pingInterval) clearInterval(this.pingInterval)
+          
+          // Auto-reconnect after 3 seconds
+          setTimeout(() => this.connect(), 3000)
         }
       } catch (err) {
         reject(err)
       }
     })
+  }
+
+  private startHeartbeat() {
+      this.pingInterval = setInterval(() => {
+          if (this.isConnected && this.ws?.readyState === WebSocket.OPEN) {
+              this.ws.send(JSON.stringify({ ping: 1 }))
+          }
+      }, 30000)
   }
 
   private send(message: any): Promise<any> {
