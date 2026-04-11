@@ -11,7 +11,7 @@ Derivex is a Trading-as-a-Service platform that automates binary trading globall
 **Status**: ✅ Complete
 
 #### Changes:
-- **Branding Update**: Changed from "AlgoSensei" to "Derivex"
+- **Branding Update**: Changed to "Derivex"
 - **Main Headline**: "Automate binary trading globally"
 - **Tagline**: "Choose a tool, not a strategy. Select from proven automated trading solutions and start earning instantly."
 - **Primary CTA**: "Connect with Deriv" (instead of "Get Started")

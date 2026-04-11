@@ -2,9 +2,9 @@ import type React from "react"
 import "@/app/globals.css"
 
 export const metadata = {
-  title: "AlgoSensei - No-Code Trading Strategy Builder",
+  title: "Derivex - Institutional Automated Trading",
   description:
-    "Build, backtest, and deploy algorithmic trading strategies with AI-powered simplicity. No coding required.",
+    "Deploy, backtest, and master algorithmic trading with institutional-grade simplicity. Powered by Deriv.",
     generator: 'v0.app'
 }
 

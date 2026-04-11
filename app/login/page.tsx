@@ -23,7 +23,7 @@ export default function LoginPage() {
             Authentication <span className="text-teal-500">Coming Soon</span>
           </h1>
           <p className="text-lg md:text-xl text-gray-300 mb-8">
-            Secure login and account management for AlgoSensei traders. Coming soon.
+            Secure login and account management for Derivex traders. Coming soon.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center pointer-events-auto">
             <Button

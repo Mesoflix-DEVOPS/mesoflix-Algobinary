@@ -25,7 +25,7 @@ export async function getAiStrategyAdvice(marketCondition: string, currentStrate
         Format your response in a clear, concise manner that can be easily understood by traders.
       `,
       system:
-        "You are an expert algorithmic trading assistant for AlgoSensei, a no-code trading strategy builder platform. Provide professional, accurate, and actionable trading strategy advice.",
+        "You are an expert algorithmic trading assistant for Derivex, a no-code trading strategy builder platform. Provide professional, accurate, and actionable trading strategy advice.",
     })
 
     return text
@@ -58,7 +58,7 @@ export async function analyzeBacktestResults(results: string): Promise<string> {
         4. Specific optimization suggestions
       `,
       system:
-        "You are an expert algorithmic trading assistant for AlgoSensei. Provide professional, data-driven analysis of backtest results with actionable optimization suggestions.",
+        "You are an expert algorithmic trading assistant for Derivex. Provide professional, data-driven analysis of backtest results with actionable optimization suggestions.",
     })
 
     return text
