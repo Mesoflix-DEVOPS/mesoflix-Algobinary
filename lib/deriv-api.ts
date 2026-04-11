@@ -41,10 +41,11 @@ class DerivAPI {
     
     return new Promise((resolve, reject) => {
       try {
+        console.log("[DerivAPI] Connecting to:", DERIV_API_URL)
         this.ws = new WebSocket(DERIV_API_URL)
 
         this.ws.onopen = () => {
-          console.log("[v0] Connected to Deriv API")
+          console.log("[DerivAPI] Connection established")
           this.isConnected = true
           this.startHeartbeat()
           resolve()
@@ -63,46 +64,44 @@ class DerivAPI {
                 handler?.(data)
                 this.responseHandlers.delete(reqId)
             }
-
-            // Handle subscription messages
-            if (data.tick || data.candles) {
-                // Silently handle market data
-            }
           } catch (err) {
-            console.error("[v0] Error parsing Deriv message:", err)
+            console.error("[DerivAPI] Error parsing message:", err)
           }
         }
 
         this.ws.onerror = (error) => {
-          console.error("[v0] WebSocket error:", error)
+          console.error("[DerivAPI] WebSocket error:", error)
+          this.isConnected = false
           reject(error)
         }
 
         this.ws.onclose = () => {
-          console.log("[v0] Disconnected from Deriv API. Reconnecting...")
+          console.log("[DerivAPI] Socket closed. Reconnecting in 3s...")
           this.isConnected = false
           if (this.pingInterval) clearInterval(this.pingInterval)
+          this.ws = null
           
-          // Auto-reconnect after 3 seconds
+          // Auto-reconnect
           setTimeout(() => this.connect(), 3000)
         }
       } catch (err) {
+        this.isConnected = false
         reject(err)
       }
     })
   }
 
   private startHeartbeat() {
-      this.pingInterval = setInterval(() => {
-          if (this.isConnected && this.ws?.readyState === WebSocket.OPEN) {
-              this.ws.send(JSON.stringify({ ping: 1 }))
-          }
-      }, 30000)
+    this.pingInterval = setInterval(() => {
+        if (this.isConnected && this.ws?.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify({ ping: 1 }))
+        }
+    }, 30000)
   }
 
   private send(message: any): Promise<any> {
     return new Promise((resolve, reject) => {
-      if (!this.ws || !this.isConnected) {
+      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
         reject(new Error("WebSocket not connected"))
         return
       }
@@ -144,7 +143,7 @@ class DerivAPI {
         symbol,
         count,
         style: "candles",
-        granularity: 300, // 5-minute candles
+        granularity: 300,
       },
     })
   }
@@ -173,6 +172,7 @@ class DerivAPI {
 
   disconnect(): void {
     if (this.ws) {
+      if (this.pingInterval) clearInterval(this.pingInterval)
       this.ws.close()
       this.isConnected = false
     }
