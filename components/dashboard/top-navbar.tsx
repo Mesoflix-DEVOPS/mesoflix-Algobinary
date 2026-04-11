@@ -21,13 +21,23 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { Badge } from "@/components/ui/badge"
+import { cn } from "@/lib/utils"
 
 export function TopNavbar() {
+  const [user, setUser] = React.useState<any>(null)
   const [ticker, setTicker] = React.useState({
     vol75: "154,232.45",
     change: "+0.45",
     isUp: true
   })
+
+  // Load user session
+  React.useEffect(() => {
+    const storedUser = localStorage.getItem("derivex_user")
+    if (storedUser) {
+      setUser(JSON.parse(storedUser))
+    }
+  }, [])
 
   // Simulated live ticker
   React.useEffect(() => {
@@ -92,8 +102,8 @@ export function TopNavbar() {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="flex items-center gap-2 px-2 hover:bg-white/5">
-              <div className="w-8 h-8 rounded-full bg-teal-500/10 border border-teal-500/30 flex items-center justify-center text-teal-500 font-bold text-xs">
-                GT
+              <div className="w-8 h-8 rounded-full bg-teal-500/10 border border-teal-500/30 flex items-center justify-center text-teal-500 font-bold text-xs overflow-hidden">
+                {user?.fullname?.[0] || user?.loginid?.[0] || "GT"}
               </div>
               <ChevronDown className="w-4 h-4 text-gray-400" />
             </Button>
@@ -101,10 +111,20 @@ export function TopNavbar() {
           <DropdownMenuContent align="end" className="w-56 bg-zinc-900 border-white/10 text-white">
             <DropdownMenuLabel>My Account</DropdownMenuLabel>
             <DropdownMenuSeparator className="bg-white/5" />
+            <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-gray-400 font-medium">
+               {user?.loginid || "Not Connected"}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator className="bg-white/5" />
             <DropdownMenuItem className="hover:bg-white/5 cursor-pointer">
               Profile
             </DropdownMenuItem>
-            <DropdownMenuItem className="hover:bg-white/5 cursor-pointer text-red-400 focus:text-red-400">
+            <DropdownMenuItem 
+               className="hover:bg-white/5 cursor-pointer text-red-400 focus:text-red-400"
+               onClick={() => {
+                   localStorage.clear()
+                   window.location.href = "/"
+               }}
+            >
               Logout
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -112,8 +132,4 @@ export function TopNavbar() {
       </div>
     </header>
   )
-}
-
-function cn(...inputs: any[]) {
-  return inputs.filter(Boolean).join(" ")
 }

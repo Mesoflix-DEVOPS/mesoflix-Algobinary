@@ -17,6 +17,18 @@ import { cn } from "@/lib/utils"
 type AuthStep = "EXTRACTING" | "CONNECTING" | "AUTHORIZING" | "SYNCING" | "FINALIZING" | "ERROR"
 
 export default function AuthCallbackPage() {
+  return (
+    <React.Suspense fallback={
+        <main className="min-h-screen bg-black flex items-center justify-center text-white">
+            <Loader2 className="w-8 h-8 text-teal-500 animate-spin" />
+        </main>
+    }>
+      <AuthCallbackContent />
+    </React.Suspense>
+  )
+}
+
+function AuthCallbackContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [step, setStep] = React.useState<AuthStep>("EXTRACTING")
@@ -74,7 +86,6 @@ export default function AuthCallbackPage() {
 
         if (dbError) {
            console.error("Supabase sync error:", dbError)
-           // We continue even if DB sync fails, but we log it
         }
 
         // Store session in localStorage
