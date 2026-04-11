@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { derivAPI } from '@/lib/deriv-api'
+import { supabase } from '@/lib/db'
+
 
 export type BotState = 'IDLE' | 'SCANNING' | 'IN_TRADE' | 'COOLDOWN' | 'STOPPED'
 export type TradeMode = 'TOUCH' | 'NO_TOUCH'
@@ -20,6 +22,7 @@ interface TradeSettings {
   volatilityThreshold: number
   activeToken?: string
   activeAcct?: string
+  toolId: string
 }
 
 interface SessionStats {
@@ -67,19 +70,38 @@ export function useTradeBot(settings: TradeSettings) {
     barrierDistance: 0
   })
 
+  // Persistence & Internal State
   const stateRef = useRef<BotState>('IDLE')
   const tickSubId = useRef<number | null>(null)
   const tickBuffer = useRef<number[]>([])
+  const lastCooldownCount = useRef<number>(0)
+  const sessionId = useRef<string | null>(null)
+  const isDemo = settings.activeAcct?.startsWith('VRTC')
 
-  const addLog = useCallback((action: string, details: string, level: 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR' = 'INFO') => {
-    setLogs(prev => [{
+
+  const addLog = useCallback(async (action: string, details: string, level: 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR' = 'INFO') => {
+    const newLog = {
       id: Math.random().toString(36).substring(7),
       timestamp: new Date().toISOString(),
       action,
       details,
       level
-    }, ...prev].slice(0, 50))
-  }, [])
+    }
+
+    setLogs(prev => [newLog, ...prev].slice(0, 50))
+
+    // DB Persistence for Real Accounts
+    if (!isDemo && sessionId.current) {
+        await supabase.from('bot_logs').insert({
+            session_id: sessionId.current,
+            tool_id: settings.toolId,
+            action,
+            details,
+            level
+        })
+    }
+  }, [isDemo, settings.toolId])
+
 
   // Strategy Analysis
   const analyzeMarket = useCallback(() => {
@@ -153,6 +175,25 @@ export function useTradeBot(settings: TradeSettings) {
     }
   }, [settings.market, analyzeMarket])
 
+  // Initial Data Load (Demo)
+  useEffect(() => {
+    if (isDemo) {
+        const savedStats = localStorage.getItem(`derivex_stats_${settings.activeAcct}`)
+        const savedLogs = localStorage.getItem(`derivex_logs_${settings.activeAcct}`)
+        if (savedStats) setStats(JSON.parse(savedStats))
+        if (savedLogs) setLogs(JSON.parse(savedLogs))
+    }
+  }, [isDemo, settings.activeAcct])
+
+  // LocalStorage Sync (Demo)
+  useEffect(() => {
+    if (isDemo && stats.trades > 0) {
+        localStorage.setItem(`derivex_stats_${settings.activeAcct}`, JSON.stringify(stats))
+        localStorage.setItem(`derivex_logs_${settings.activeAcct}`, JSON.stringify(logs))
+    }
+  }, [isDemo, stats, logs, settings.activeAcct])
+
+
   const startBot = async () => {
     if (!settings.activeToken) {
         addLog('ERROR', 'No active account token found. Please connect your account.', 'ERROR')
@@ -169,6 +210,21 @@ export function useTradeBot(settings: TradeSettings) {
         }
 
         addLog('START', `StatEngine Initializing on ${settings.market}...`, 'SUCCESS')
+        
+        // Database Session Lifecycle (Real)
+        if (!isDemo) {
+            const { data: userData } = await supabase.auth.getUser()
+            if (userData.user) {
+                const { data: session } = await supabase.from('bot_sessions').insert({
+                    user_id: userData.user.id,
+                    tool_id: settings.toolId,
+                    settings: settings,
+                    status: 'ACTIVE'
+                }).select().single()
+                if (session) sessionId.current = session.id
+            }
+        }
+
         setState('SCANNING')
         stateRef.current = 'SCANNING'
     } catch (err: any) {
@@ -176,11 +232,27 @@ export function useTradeBot(settings: TradeSettings) {
     }
   }
 
-  const stopBot = () => {
+  const stopBot = async () => {
     addLog('STOP', 'Bot stopped manually.', 'WARNING')
+    
+    // Finalize DB Session
+    if (!isDemo && sessionId.current) {
+        await supabase.from('bot_sessions').update({
+            status: 'STOPPED',
+            total_trades: stats.trades,
+            total_wins: stats.wins,
+            total_losses: stats.losses,
+            total_profit: stats.profit,
+            win_rate: stats.winRate,
+            ended_at: new Date().toISOString()
+        }).eq('id', sessionId.current)
+        sessionId.current = null
+    }
+
     setState('STOPPED')
     stateRef.current = 'STOPPED'
   }
+
 
   const executeTrade = useCallback(async (computedBarrier: number) => {
     if (stateRef.current !== 'SCANNING' || !livePrice) return
@@ -261,11 +333,26 @@ export function useTradeBot(settings: TradeSettings) {
               })
               
               addLog('SETTLED', `Result: ${isWin ? '+' : ''}${p.toFixed(2)} on ${tradeId}`, isWin ? 'SUCCESS' : 'ERROR')
+              
+              // Update Session Statistics in DB (Real)
+              const updateSession = async (newStats: SessionStats) => {
+                  if (!isDemo && sessionId.current) {
+                      await supabase.from('bot_sessions').update({
+                          total_trades: newStats.trades,
+                          total_wins: newStats.wins,
+                          total_losses: newStats.losses,
+                          total_profit: newStats.profit,
+                          win_rate: newStats.winRate
+                      }).eq('id', sessionId.current)
+                  }
+              }
+
               setCurrentTrade(null)
               setState('SCANNING')
               stateRef.current = 'SCANNING'
           }
       })
+
       
       setState('IN_TRADE')
       stateRef.current = 'IN_TRADE'
@@ -296,13 +383,15 @@ export function useTradeBot(settings: TradeSettings) {
             return
         }
 
-        if (stats.trades > 0 && stats.trades % settings.cooldownTrigger === 0 && cooldownTime === 0) {
+        if (stats.trades > 0 && stats.trades % settings.cooldownTrigger === 0 && cooldownTime === 0 && lastCooldownCount.current !== stats.trades) {
             addLog('COOLDOWN', `Session Cooldown: Resting for ${settings.cooldownDuration} minute...`, 'WARNING')
+            lastCooldownCount.current = stats.trades // Mark this count as cooled down
             setState('COOLDOWN')
             stateRef.current = 'COOLDOWN'
             setCooldownTime(60)
             return
         }
+
 
         if (metrics.volatility > 0) {
             const isVolatilitySafe = metrics.volatility < settings.volatilityThreshold
@@ -348,8 +437,18 @@ export function useTradeBot(settings: TradeSettings) {
     metrics,
     startBot,
     stopBot,
+    resetStats: () => {
+        if (isDemo) {
+            localStorage.removeItem(`derivex_stats_${settings.activeAcct}`)
+            localStorage.removeItem(`derivex_logs_${settings.activeAcct}`)
+            setStats({ trades: 0, wins: 0, losses: 0, profit: 0, winRate: 0 })
+            setLogs([])
+            addLog('RESET', 'Demo statistics and logs cleared.', 'INFO')
+        }
+    },
     closeTrade: () => {
         addLog('HALT', 'Manual trade closure ignored for strategy integrity.', 'WARNING')
     }
   }
 }
+

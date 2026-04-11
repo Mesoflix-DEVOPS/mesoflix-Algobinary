@@ -26,7 +26,8 @@ export default function SessionTraderPage() {
     kMultiplier: 10,
     volatilityThreshold: 0.5,
     activeToken: '',
-    activeAcct: ''
+    activeAcct: '',
+    toolId: toolId
   })
 
   // Sync with Global Account state
@@ -90,6 +91,7 @@ export default function SessionTraderPage() {
                 activeAcct={settings.activeAcct}
                 onStart={bot.startBot}
                 onStop={bot.stopBot}
+                onReset={bot.resetStats}
                 onCloseTrade={bot.closeTrade}
             />
         </div>

@@ -22,12 +22,13 @@ interface BotDisplayProps {
   activeAcct?: string
   onStart: () => void
   onStop: () => void
+  onReset: () => void
   onCloseTrade: () => void
 }
 
 export function BotDisplay({ 
   state, stats, currentTrade, cooldownTime, livePrice, metrics, activeAcct,
-  onStart, onStop, onCloseTrade 
+  onStart, onStop, onReset, onCloseTrade 
 }: BotDisplayProps) {
   const [progress, setProgress] = useState(0)
   const [lastPrice, setLastPrice] = useState<number | null>(null)
@@ -80,6 +81,17 @@ export function BotDisplay({
                 <div className="flex items-center gap-2">
                     <div className="w-1.5 h-1.5 rounded-full bg-teal-500 shadow-[0_0_8px_rgba(20,184,166,0.5)]" />
                     <span className="text-xs font-black text-white font-mono">{activeAcct || "DETACHED"}</span>
+                    {activeAcct?.startsWith('VRTC') && (
+                        <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            onClick={onReset}
+                            className="h-6 w-6 ml-2 text-white/20 hover:text-red-400 hover:bg-red-500/10 transition-all rounded-full"
+                            title="Reset Local Statistics"
+                        >
+                            <XCircle className="w-3.5 h-3.5" />
+                        </Button>
+                    )}
                 </div>
             </div>
             <div className="w-px h-6 bg-white/10 hidden sm:block" />
