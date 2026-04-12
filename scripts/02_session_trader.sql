@@ -1,11 +1,7 @@
 -- Add session trader specific tables and updates
 
 -- Ensure trading_tools has a unique name constraint for upsert
-DO $$ BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'trading_tools_name_key') THEN
-        ALTER TABLE trading_tools ADD CONSTRAINT trading_tools_name_key UNIQUE (name);
-    END IF;
-END $$;
+ALTER TABLE trading_tools ADD CONSTRAINT trading_tools_name_key UNIQUE (name);
 
 -- Update trades table with additional metadata
 ALTER TABLE trades ADD COLUMN IF NOT EXISTS contract_id VARCHAR(255);

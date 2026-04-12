@@ -1,6 +1,3 @@
-"use client"
-
-import * as React from "react"
 import { 
   Zap, 
   TrendingUp, 
@@ -10,7 +7,9 @@ import {
   Activity,
   Clock,
   ShieldCheck,
-  LayoutGrid
+  LayoutGrid,
+  Radar,
+  Timer
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -19,6 +18,8 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { supabase } from "@/lib/db"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
+import { useBot } from "@/contexts/bot-context"
+import { LiveActivityFeed } from "@/components/dashboard/live-activity-feed"
 
 export const dynamic = "force-dynamic"
 
@@ -32,19 +33,13 @@ interface Tool {
   status?: string
 }
 
-interface ActivityEvent {
-  id: string
-  activity_type: string
-  description: string
-  created_at: string
-}
-
 export default function DashboardPage() {
   const [tools, setTools] = React.useState<Tool[]>([])
-  const [activities, setActivities] = React.useState<ActivityEvent[]>([])
   const [user, setUser] = React.useState<any>(null)
   const [activeAccount, setActiveAccount] = React.useState<any>(null)
   const [isLoading, setIsLoading] = React.useState(true)
+  
+  const { state, stats, currentTrade, cooldownTime, startBot } = useBot()
 
   React.useEffect(() => {
     // Load local user & accounts
@@ -74,13 +69,8 @@ export default function DashboardPage() {
     }
 
     async function fetchData() {
-      const [toolsRes, activityRes] = await Promise.all([
-        supabase.from("trading_tools").select("*").order("name"),
-        supabase.from("activity_feed").select("*").order("created_at", { ascending: false }).limit(10)
-      ])
-
-      if (toolsRes.data) setTools(toolsRes.data)
-      if (activityRes.data) setActivities(activityRes.data)
+      const { data } = await supabase.from("trading_tools").select("*").order("name")
+      if (data) setTools(data)
       setIsLoading(false)
     }
     fetchData()
@@ -152,14 +142,19 @@ export default function DashboardPage() {
                     <ShieldCheck className={cn("w-5 h-5", isActiveDemo ? "text-orange-500" : "text-teal-500")} />
                 </div>
             </div>
-            <Button className={cn(
-                "w-full md:w-auto font-black h-12 px-8 rounded-xl shadow-2xl uppercase tracking-widest text-xs transition-all duration-300",
-                isActiveDemo 
-                    ? "bg-orange-500 hover:bg-orange-600 text-black shadow-orange-500/20" 
-                    : "bg-teal-500 hover:bg-teal-600 text-black shadow-teal-500/20"
-            )}>
+            <Button 
+                onClick={startBot}
+                disabled={state !== 'IDLE' && state !== 'STOPPED'}
+                className={cn(
+                    "w-full md:w-auto font-black h-12 px-8 rounded-xl shadow-2xl uppercase tracking-widest text-xs transition-all duration-300",
+                    isActiveDemo 
+                        ? "bg-orange-500 hover:bg-orange-600 text-black shadow-orange-500/20" 
+                        : "bg-teal-500 hover:bg-teal-600 text-black shadow-teal-500/20",
+                    (state !== 'IDLE' && state !== 'STOPPED') && "opacity-50 grayscale"
+                )}
+            >
               <Zap className="mr-2 w-5 h-5 fill-black" />
-              Initialize Engine
+              {state === 'IDLE' || state === 'STOPPED' ? "Initialize Engine" : "Engine Active"}
             </Button>
           </div>
         </div>
@@ -181,15 +176,57 @@ export default function DashboardPage() {
               </div>
             </CardHeader>
             <CardContent className="pt-4">
-              <div className="flex flex-col items-center justify-center py-8 text-center border-2 border-dashed border-white/5 rounded-2xl bg-black/20">
-                <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mb-4">
-                   <Zap className="w-6 h-6 text-gray-600" />
-                </div>
-                <h3 className="text-gray-300 font-semibold">No active tool currently running</h3>
-                <p className="text-sm text-gray-500 mt-1 max-w-[240px]">Select a tool from the marketplace below to start your trading session.</p>
-                <Button variant="outline" className="mt-6 border-white/10 hover:bg-white/5 text-white bg-transparent">
-                  Browse Marketplace
-                </Button>
+              <div className="flex flex-col items-center justify-center min-h-[160px] text-center rounded-2xl bg-black/20 border border-white/5 relative overflow-hidden">
+                {state === 'IDLE' || state === 'STOPPED' ? (
+                  <>
+                    <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mb-4">
+                       <Zap className="w-6 h-6 text-gray-600" />
+                    </div>
+                    <h3 className="text-gray-300 font-semibold uppercase tracking-tighter">No active tool currently running</h3>
+                    <p className="text-[10px] text-gray-500 mt-1 max-w-[200px] uppercase font-bold tracking-widest">Select a tool below to initialize the neural engine</p>
+                  </>
+                ) : (
+                  <div className="w-full h-full p-6 flex items-center justify-between">
+                     <div className="flex flex-col items-start gap-1">
+                        <span className="text-[10px] font-black text-teal-500 uppercase tracking-widest">Algorithm Status</span>
+                        <div className="flex items-center gap-2">
+                           <div className="w-2 h-2 rounded-full bg-teal-500 animate-pulse" />
+                           <span className="text-xl font-black text-white uppercase">{state}</span>
+                        </div>
+                        {currentTrade && (
+                           <div className="mt-4 flex flex-col items-start">
+                              <span className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">Active Trade P/L</span>
+                              <span className={cn(
+                                "text-2xl font-black",
+                                currentTrade.profit >= 0 ? "text-green-400" : "text-red-400"
+                              )}>
+                                {currentTrade.profit > 0 ? '+' : ''}{currentTrade.profit.toFixed(2)}
+                              </span>
+                           </div>
+                        )}
+                     </div>
+
+                     <div className="flex flex-col items-end gap-1">
+                        <div className="p-3 rounded-xl bg-white/5 border border-white/5 grid grid-cols-2 gap-4">
+                           <div className="flex flex-col items-end">
+                              <span className="text-[10px] text-gray-500 font-bold uppercase">Wins</span>
+                              <span className="text-sm font-black text-green-400">{stats.wins}</span>
+                           </div>
+                           <div className="flex flex-col items-end">
+                              <span className="text-[10px] text-gray-500 font-bold uppercase">Losses</span>
+                              <span className="text-sm font-black text-red-400">{stats.losses}</span>
+                           </div>
+                        </div>
+                        <Link href="/tool/session-trader">
+                           <Button size="sm" variant="outline" className="mt-2 text-[9px] h-7 border-teal-500/20 text-teal-500 uppercase font-black hover:bg-teal-500/10">
+                              View Full Diagnostic
+                           </Button>
+                        </Link>
+                     </div>
+                     
+                     <Radar className="absolute -right-4 -bottom-4 w-32 h-32 text-teal-500/10 animate-spin-slow pointer-events-none" />
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -302,42 +339,9 @@ export default function DashboardPage() {
                   </div>
                 </div>
              </CardHeader>
-             <CardContent className="flex-1 overflow-hidden pt-0 px-2">
-                <ScrollArea className="h-full px-4">
-                  <div className="space-y-6 py-4">
-                    {activities.map((act) => (
-                      <div key={act.id} className="flex gap-4 group">
-                        <div className="flex flex-col items-center">
-                          <div className={cn(
-                            "w-8 h-8 rounded-full flex items-center justify-center border transition-all",
-                            act.activity_type === "TRADE" ? "bg-teal-500/10 border-teal-500/20 text-teal-500" : "bg-blue-500/10 border-blue-500/20 text-blue-500"
-                          )}>
-                             {act.activity_type === "TRADE" ? <Zap className="w-4 h-4 fill-current" /> : <ShieldCheck className="w-4 h-4" />}
-                          </div>
-                          <div className="w-[2px] flex-1 bg-white/5 my-2" />
-                        </div>
-                        <div className="pb-6">
-                           <div className="flex items-center gap-2 mb-1">
-                              <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">
-                                {act.activity_type}
-                              </span>
-                              <span className="text-[10px] text-gray-600 font-mono flex items-center gap-1">
-                                <Clock className="w-2.5 h-2.5" />
-                                {new Date(act.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                              </span>
-                           </div>
-                           <p className="text-sm text-gray-300 leading-relaxed font-medium">
-                              {act.description}
-                           </p>
-                        </div>
-                      </div>
-                    ))}
-                    {activities.length === 0 && !isLoading && (
-                       <p className="text-center text-gray-500 text-sm py-10 italic">No recent activity detected.</p>
-                    )}
-                  </div>
-                </ScrollArea>
-             </CardContent>
+              <CardContent className="flex-1 overflow-hidden pt-0 px-2 h-[450px]">
+                 <LiveActivityFeed />
+              </CardContent>
           </Card>
         </div>
       </div>

@@ -5,39 +5,23 @@ import { useParams } from 'next/navigation'
 import { BotSettings } from '@/components/trading/bot-settings'
 import { BotDisplay } from '@/components/trading/bot-display'
 import { BotLogs } from '@/components/trading/bot-logs'
-import { useTradeBot, TradeMode } from '@/hooks/use-trade-bot'
+import { useBot } from '@/contexts/bot-context'
 import { supabase } from '@/lib/db'
+
 
 export default function SessionTraderPage() {
   const params = useParams()
   const toolId = params.id as string
-  
+  const { settings, setSettings, ...bot } = useBot()
   const [toolName, setToolName] = useState('Session Trader')
-  const [settings, setSettings] = useState({
-    stake: 10,
-    takeProfit: 50,
-    stopLoss: 30,
-    maxTrades: 10,
-    cooldownTrigger: 5,
-    cooldownDuration: 1,
-    market: 'R_100',
-    autoSwitch: true,
-    tradeMode: 'NO_TOUCH' as TradeMode,
-    kMultiplier: 10,
-    volatilityThreshold: 0.5,
-    activeToken: '',
-    activeAcct: '',
-    toolId: toolId
-  })
 
-  // Sync with Global Account state
+  // Update toolId in settings if not already set
   useEffect(() => {
-    const token = localStorage.getItem("derivex_token") || ""
-    const acct = localStorage.getItem("derivex_acct") || ""
-    setSettings(prev => ({ ...prev, activeToken: token, activeAcct: acct }))
-  }, [])
+    if (settings.toolId !== toolId) {
+       setSettings(prev => ({ ...prev, toolId }))
+    }
+  }, [toolId, settings.toolId, setSettings])
 
-  const bot = useTradeBot(settings)
 
   useEffect(() => {
     async function fetchTool() {

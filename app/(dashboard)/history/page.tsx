@@ -54,13 +54,14 @@ export default function HistoryPage() {
     async function fetchHistory() {
       setIsLoading(true)
       try {
-        // In a real app, we'd filter by current user's DB ID
-        // For now we fetch all recent trades
+        const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()
+        
         const { data, error } = await supabase
           .from("trades")
           .select("*, trading_tools(name)")
+          .gte("entry_time", threeDaysAgo)
           .order("entry_time", { ascending: false })
-          .limit(50)
+          .limit(100)
 
         if (!error && data) {
           setTrades(data.map(t => ({

@@ -127,31 +127,25 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupLabel className="text-gray-500 px-4 mb-2">Trading Tools</SidebarGroupLabel>
           <SidebarMenu>
-            {tools.length > 0 ? (
-              tools.map((tool) => (
-                <SidebarMenuItem key={tool.id}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={pathname === `/tool/${tool.id}`}
-                    className={cn(
-                      "hover:bg-white/5 transition-colors",
-                      pathname === `/tool/${tool.id}` ? "text-teal-400 bg-teal-500/10" : "text-gray-400"
-                    )}
-                    tooltip={tool.name}
-                  >
-                    <Link href={`/tool/${tool.id}`} onClick={handleLinkClick} className="flex items-center justify-between w-full">
-                      <div className="flex items-center gap-2">
-                        <Circle className="w-2 h-2 fill-teal-500 text-teal-500 shadow-[0_0_8px_rgba(20,184,166,0.8)]" />
-                        <span>{tool.name}</span>
-                      </div>
-                      {state === "expanded" && <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />}
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))
-            ) : (
-              <div className="px-4 py-2 text-xs text-gray-600 italic">No tools added yet</div>
-            )}
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                asChild
+                isActive={pathname.includes("/tool/")}
+                className={cn(
+                  "hover:bg-white/5 transition-colors",
+                  pathname.includes("/tool/") ? "text-teal-400 bg-teal-500/10" : "text-gray-400"
+                )}
+                tooltip="Session Trader"
+              >
+                <Link href="/tool/session-trader" onClick={handleLinkClick} className="flex items-center justify-between w-full">
+                  <div className="flex items-center gap-2">
+                    <Circle className="w-2 h-2 fill-teal-500 text-teal-500 shadow-[0_0_8px_rgba(20,184,166,0.8)]" />
+                    <span className="font-bold">Session Trader</span>
+                  </div>
+                  {state === "expanded" && <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />}
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
           </SidebarMenu>
         </SidebarGroup>
 
