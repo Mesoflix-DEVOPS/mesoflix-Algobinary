@@ -11,6 +11,9 @@ import {
   Zap, BarChart3, Fingerprint, Radar, Square, Play, XCircle
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { Eye, RefreshCw, History, Info } from "lucide-react"
+import { TradeHistoryModal } from "./trade-history-modal"
+import { Trade } from "@/contexts/bot-context"
 
 interface BotDisplayProps {
   state: BotState
@@ -24,16 +27,18 @@ interface BotDisplayProps {
   onStop: () => void
   onReset: () => void
   onCloseTrade: () => void
+  tradeHistory: Trade[]
 }
 
 export function BotDisplay({ 
   state, stats, currentTrade, cooldownTime, livePrice, metrics, activeAcct,
-  onStart, onStop, onReset, onCloseTrade 
+  onStart, onStop, onReset, onCloseTrade, tradeHistory 
 }: BotDisplayProps) {
   const [progress, setProgress] = useState(0)
   const [lastPrice, setLastPrice] = useState<number | null>(null)
   const [priceColor, setPriceColor] = useState("text-white")
   const [flash, setFlash] = useState(false)
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false)
 
   useEffect(() => {
     if (livePrice !== null) {
@@ -136,12 +141,22 @@ export function BotDisplay({
                 </div>
                 <BarChart3 className="w-5 h-5 text-teal-500/30" />
             </Card>
-            <Card className="bg-white/[0.02] border-white/5 p-4 flex items-center justify-between">
+            <Card className="bg-white/[0.02] border-white/5 p-4 flex items-center justify-between group/card relative">
                 <div className="flex flex-col">
                     <span className="text-[9px] font-black text-muted-foreground uppercase tracking-tighter">Trades</span>
                     <span className="text-xl font-black text-white">{stats.trades}</span>
                 </div>
-                <CheckCircle2 className="w-5 h-5 text-teal-500/30" />
+                <div className="flex items-center gap-2">
+                    <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        onClick={() => setIsHistoryOpen(true)}
+                        className="h-8 w-8 rounded-lg hover:bg-teal-500/10 hover:text-teal-400 text-white/20 transition-all"
+                    >
+                        <Eye className="w-4 h-4" />
+                    </Button>
+                    <CheckCircle2 className="w-5 h-5 text-teal-500/30" />
+                </div>
             </Card>
         </div>
 
@@ -209,6 +224,19 @@ export function BotDisplay({
                     {state} • {metrics.trendDirection}
                 </Badge>
             </div>
+
+            {/* Bottom Right Reset Control */}
+            <div className="absolute bottom-4 right-4 z-20">
+                <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={onReset}
+                    className="h-9 px-3 bg-red-500/5 hover:bg-red-500/20 border border-red-500/10 text-red-500/40 hover:text-red-500 rounded-xl transition-all group/reset"
+                >
+                    <RefreshCw className="w-3.5 h-3.5 mr-2 group-hover/reset:rotate-180 transition-transform duration-500" />
+                    <span className="text-[10px] font-black uppercase tracking-widest">Reset Session</span>
+                </Button>
+            </div>
         </div>
 
         {/* Status Hub */}
@@ -271,6 +299,13 @@ export function BotDisplay({
             </Button>
         )}
       </div>
+
+      {/* Audit Modal Integration */}
+      <TradeHistoryModal 
+        isOpen={isHistoryOpen} 
+        onOpenChange={setIsHistoryOpen} 
+        history={tradeHistory} 
+      />
     </div>
   )
 }

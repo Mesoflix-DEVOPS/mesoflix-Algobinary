@@ -69,6 +69,7 @@ export default function SessionTraderPage() {
                 state={bot.state}
                 stats={bot.stats}
                 currentTrade={bot.currentTrade}
+                tradeHistory={bot.tradeHistory}
                 cooldownTime={bot.cooldownTime}
                 livePrice={bot.livePrice}
                 metrics={bot.metrics}

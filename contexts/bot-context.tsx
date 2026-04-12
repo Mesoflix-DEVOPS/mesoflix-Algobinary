@@ -49,6 +49,19 @@ interface StrategicMetrics {
   barrierDistance: number
 }
 
+export interface Trade {
+  id: string
+  symbol: string
+  type: string
+  stake: number
+  barrier: string
+  entryPrice: number
+  exitPrice: number
+  profit: number
+  result: 'WIN' | 'LOSS'
+  timestamp: string
+}
+
 interface BotContextType {
   state: BotState
   stats: SessionStats
@@ -60,6 +73,7 @@ interface BotContextType {
   settings: TradeSettings
   balance: number | null
   currency: string
+  tradeHistory: Trade[]
   setSettings: React.Dispatch<React.SetStateAction<TradeSettings>>
   startBot: () => Promise<void>
   stopBot: () => Promise<void>
@@ -99,6 +113,7 @@ export function BotProvider({ children }: { children: React.ReactNode }) {
   const [metrics, setMetrics] = useState<StrategicMetrics>({
     volatility: 0, trendStrength: 0, trendDirection: 'sideways', barrierDistance: 0
   })
+  const [tradeHistory, setTradeHistory] = useState<Trade[]>([])
 
   // Internal Refs
   const balanceSubId = useRef<number | null>(null)
@@ -211,8 +226,10 @@ export function BotProvider({ children }: { children: React.ReactNode }) {
     if (acct.startsWith('VRTC')) {
         const savedStats = localStorage.getItem(`derivex_stats_${acct}`)
         const savedLogs = localStorage.getItem(`derivex_logs_${acct}`)
+        const savedHistory = localStorage.getItem(`derivex_history_${acct}`)
         if (savedStats) setStats(JSON.parse(savedStats))
         if (savedLogs) setLogs(JSON.parse(savedLogs))
+        if (savedHistory) setTradeHistory(JSON.parse(savedHistory))
     }
     isRestored.current = true
   }, [])
@@ -222,8 +239,9 @@ export function BotProvider({ children }: { children: React.ReactNode }) {
     if (isRestored.current && isDemo && stats.trades > 0) {
         localStorage.setItem(`derivex_stats_${settings.activeAcct}`, JSON.stringify(stats))
         localStorage.setItem(`derivex_logs_${settings.activeAcct}`, JSON.stringify(logs))
+        localStorage.setItem(`derivex_history_${settings.activeAcct}`, JSON.stringify(tradeHistory))
     }
-  }, [isDemo, stats, logs, settings.activeAcct])
+  }, [isDemo, stats, logs, tradeHistory, settings.activeAcct])
 
   // Authorization & Settings Synchronization
   useEffect(() => {
@@ -347,6 +365,22 @@ export function BotProvider({ children }: { children: React.ReactNode }) {
                   const np = prev.profit + p
                   return { trades: nt, wins: nw, losses: nl, profit: Number(np.toFixed(2)), winRate: Number(((nw / nt) * 100).toFixed(1)) }
               })
+
+              // Add to Detailed History
+              const newTrade: Trade = {
+                id: tradeId,
+                symbol: settings.market,
+                type: settings.tradeMode,
+                stake: settings.stake,
+                barrier: contract.barrier || '0',
+                entryPrice: Number(contract.entry_tick),
+                exitPrice: Number(contract.exit_tick),
+                profit: p,
+                result: isWin ? 'WIN' : 'LOSS',
+                timestamp: new Date().toISOString()
+              }
+              setTradeHistory(prev => [newTrade, ...prev].slice(0, 50)) // Keep last 50
+
               addLog('SETTLED', `Result: ${isWin ? '+' : ''}${p.toFixed(2)} on ${tradeId}`, isWin ? 'SUCCESS' : 'ERROR')
               
               // Spacing reset
@@ -424,14 +458,16 @@ export function BotProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <BotContext.Provider value={{
-      state, stats, currentTrade, logs, cooldownTime, livePrice, metrics, settings,
+      state, stats, currentTrade, logs, tradeHistory, cooldownTime, livePrice, metrics, settings,
       balance, currency,
       setSettings, startBot, stopBot, resetStats: () => {
         if (isDemo) {
            localStorage.removeItem(`derivex_stats_${settings.activeAcct}`)
            localStorage.removeItem(`derivex_logs_${settings.activeAcct}`)
+           localStorage.removeItem(`derivex_history_${settings.activeAcct}`)
            setStats({ trades: 0, wins: 0, losses: 0, profit: 0, winRate: 0 })
            setLogs([])
+           setTradeHistory([])
         }
       },
       closeTrade: () => addLog('HALT', 'Manual closure disabled for strategy integrity.', 'WARNING')
