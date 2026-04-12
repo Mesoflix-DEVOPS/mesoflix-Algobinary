@@ -225,14 +225,29 @@ export function BotProvider({ children }: { children: React.ReactNode }) {
     }
   }, [isDemo, stats, logs, settings.activeAcct])
 
-  // Authorization Synchronization
+  // Authorization & Settings Synchronization
   useEffect(() => {
      const token = localStorage.getItem("derivex_token")
      const acct = localStorage.getItem("derivex_acct")
-     if (token && acct) {
+     const savedSettings = localStorage.getItem("derivex_bot_settings")
+     
+     if (savedSettings) {
+        try {
+            const parsed = JSON.parse(savedSettings)
+            setSettings(prev => ({ ...prev, ...parsed, activeToken: token || "", activeAcct: acct || "" }))
+        } catch (e) { console.error("Failed to restore settings", e) }
+     } else if (token && acct) {
         setSettings(prev => ({ ...prev, activeToken: token, activeAcct: acct }))
      }
   }, [])
+
+  // Settings Saver
+  useEffect(() => {
+     if (settings.toolId) {
+        const { activeToken, activeAcct, ...rest } = settings
+        localStorage.setItem("derivex_bot_settings", JSON.stringify(rest))
+     }
+  }, [settings])
 
   const startBot = async () => {
     if (!settings.activeToken) {
@@ -358,7 +373,18 @@ export function BotProvider({ children }: { children: React.ReactNode }) {
   // Intelligence Loop
   useEffect(() => {
     if (state === 'SCANNING') {
-        if (stats.trades >= settings.maxTrades || stats.profit >= settings.takeProfit || stats.profit <= -settings.stopLoss) {
+        if (stats.trades >= settings.maxTrades) {
+            addLog('HALT', `Max trade limit (${settings.maxTrades}) reached for this session.`, 'WARNING')
+            stopBot()
+            return
+        }
+        if (stats.profit >= settings.takeProfit) {
+            addLog('HALT', `Take Profit goal of $${settings.takeProfit} achieved.`, 'SUCCESS')
+            stopBot()
+            return
+        }
+        if (stats.profit <= -settings.stopLoss) {
+            addLog('HALT', `Stop Loss limit of -$${settings.stopLoss} hit.`, 'ERROR')
             stopBot()
             return
         }
