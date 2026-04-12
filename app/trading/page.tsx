@@ -1,9 +1,13 @@
 "use client"
 
 import { useRouter } from "next/navigation"
+import dynamic from "next/dynamic"
 import { Button } from "@/components/ui/button"
-import { MainScene } from "@/components/main-scene"
 import { Activity, DollarSign, TrendingUp, Zap } from "lucide-react"
+
+const MainScene = dynamic(() => import("@/components/main-scene").then(mod => mod.MainScene), {
+  ssr: false,
+})
 
 export default function TradingPage() {
   const router = useRouter()

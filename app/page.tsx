@@ -2,8 +2,12 @@
 
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
+import dynamic from "next/dynamic"
 import { Button } from "@/components/ui/button"
-import { MainScene } from "@/components/main-scene"
+
+const MainScene = dynamic(() => import("@/components/main-scene").then(mod => mod.MainScene), {
+  ssr: false,
+})
 
 export default function Home() {
   const router = useRouter()
