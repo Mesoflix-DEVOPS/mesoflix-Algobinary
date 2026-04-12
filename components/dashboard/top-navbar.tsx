@@ -95,17 +95,54 @@ export function TopNavbar() {
       }
   }
 
+  const balanceSubId = React.useRef<number | null>(null)
+
+  // Real-time Balance Core
+  React.useEffect(() => {
+    let isSubscribed = true
+    const setupSub = async () => {
+        if (balanceSubId.current) {
+            await derivAPI.unsubscribe(balanceSubId.current)
+            balanceSubId.current = null
+        }
+        
+        // Subscription will automatically reflect our current authorized account
+        balanceSubId.current = await derivAPI.subscribeToBalance((balanceData) => {
+            if (!isSubscribed) return
+            setBalances(prev => ({
+                ...prev,
+                [balanceData.loginid]: parseFloat(balanceData.balance).toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                })
+            }))
+        })
+    }
+    setupSub()
+    return () => {
+        isSubscribed = false
+        if (balanceSubId.current) derivAPI.unsubscribe(balanceSubId.current)
+    }
+  }, [activeAcct])
+
+  // Periodic Background Refresh for Inactive Accounts
+  React.useEffect(() => {
+    const interval = setInterval(() => {
+        if (!isSyncing && accounts.length > 0) {
+            syncBalances(accounts)
+        }
+    }, 60000)
+    return () => clearInterval(interval)
+  }, [accounts, isSyncing])
+
   const handleSwitchAccount = (acct: any) => {
     if (acct.account === activeAcct) return
 
-    // Update session storage
     localStorage.setItem("derivex_token", acct.token)
     localStorage.setItem("derivex_acct", acct.account)
-    
-    // Update cookies for middleware
     document.cookie = `derivex_token=${acct.token}; path=/; max-age=604800; samesite=lax`;
     
-    // Refresh to re-authorize WebSocket and update UI
+    // Refresh to ensure all providers re-sync with new authorization
     window.location.reload()
   }
 

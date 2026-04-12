@@ -1,3 +1,4 @@
+import * as React from "react"
 import { 
   Zap, 
   TrendingUp, 
@@ -39,7 +40,7 @@ export default function DashboardPage() {
   const [activeAccount, setActiveAccount] = React.useState<any>(null)
   const [isLoading, setIsLoading] = React.useState(true)
   
-  const { state, stats, currentTrade, cooldownTime, startBot } = useBot()
+  const { state, stats, currentTrade, cooldownTime, startBot, balance, currency } = useBot()
 
   React.useEffect(() => {
     // Load local user & accounts
@@ -127,8 +128,8 @@ export default function DashboardPage() {
                     "text-xl font-black mt-0.5 flex items-center gap-2",
                     isActiveDemo ? "text-orange-400" : "text-teal-400"
                 )}>
-                    <span className="text-xs opacity-50 font-bold">{activeAccount?.currency || "USD"}</span>
-                    {parseFloat(activeAccount?.balance || "0").toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    <span className="text-xs opacity-50 font-bold">{currency}</span>
+                    {(balance ?? parseFloat(activeAccount?.balance || "0")).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </span>
               </div>
             </div>
@@ -347,8 +348,4 @@ export default function DashboardPage() {
       </div>
     </div>
   )
-}
-
-function cn(...inputs: any[]) {
-  return inputs.filter(Boolean).join(" ")
 }

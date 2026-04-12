@@ -198,6 +198,22 @@ class DerivAPI {
     return msgId
   }
 
+  async subscribeToBalance(onBalance: (data: any) => void): Promise<number | null> {
+    await this.waitForConnection()
+    
+    const msgId = ++this.messageId
+    this.subscriptionHandlers.set(msgId, (data) => {
+        if (data.balance) onBalance(data.balance)
+    })
+    
+    this.ws?.send(JSON.stringify({
+        balance: 1,
+        subscribe: 1,
+        req_id: msgId
+    }))
+    return msgId
+  }
+
   async unsubscribe(reqId: number): Promise<void> {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return
     this.ws.send(JSON.stringify({ forget: reqId }))

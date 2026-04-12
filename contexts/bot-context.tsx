@@ -58,6 +58,8 @@ interface BotContextType {
   livePrice: number | null
   metrics: StrategicMetrics
   settings: TradeSettings
+  balance: number | null
+  currency: string
   setSettings: React.Dispatch<React.SetStateAction<TradeSettings>>
   startBot: () => Promise<void>
   stopBot: () => Promise<void>
@@ -92,11 +94,14 @@ export function BotProvider({ children }: { children: React.ReactNode }) {
   const [logs, setLogs] = useState<any[]>([])
   const [cooldownTime, setCooldownTime] = useState(0)
   const [livePrice, setLivePrice] = useState<number | null>(null)
+  const [balance, setBalance] = useState<number | null>(null)
+  const [currency, setCurrency] = useState<string>("USD")
   const [metrics, setMetrics] = useState<StrategicMetrics>({
     volatility: 0, trendStrength: 0, trendDirection: 'sideways', barrierDistance: 0
   })
 
   // Internal Refs
+  const balanceSubId = useRef<number | null>(null)
   const stateRef = useRef<BotState>('IDLE')
   const tickSubId = useRef<number | null>(null)
   const tickBuffer = useRef<number[]>([])
@@ -178,6 +183,27 @@ export function BotProvider({ children }: { children: React.ReactNode }) {
         if (tickSubId.current) derivAPI.unsubscribe(tickSubId.current)
     }
   }, [settings.market, analyzeMarket])
+
+  // Global Balance Stream
+  useEffect(() => {
+    let isSubscribed = true
+    const setupBalanceSub = async () => {
+        if (balanceSubId.current) {
+            await derivAPI.unsubscribe(balanceSubId.current)
+            balanceSubId.current = null
+        }
+        balanceSubId.current = await derivAPI.subscribeToBalance((data) => {
+            if (!isSubscribed) return
+            setBalance(Number(data.balance))
+            setCurrency(data.currency || "USD")
+        })
+    }
+    setupBalanceSub()
+    return () => {
+        isSubscribed = false
+        if (balanceSubId.current) derivAPI.unsubscribe(balanceSubId.current)
+    }
+  }, [settings.activeAcct])
 
   // Persistence Restoration Engine (Anti-Refresh Loss)
   useEffect(() => {
@@ -373,6 +399,7 @@ export function BotProvider({ children }: { children: React.ReactNode }) {
   return (
     <BotContext.Provider value={{
       state, stats, currentTrade, logs, cooldownTime, livePrice, metrics, settings,
+      balance, currency,
       setSettings, startBot, stopBot, resetStats: () => {
         if (isDemo) {
            localStorage.removeItem(`derivex_stats_${settings.activeAcct}`)
