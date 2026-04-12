@@ -5,7 +5,11 @@ export const metadata = {
   title: "Derivex - Institutional Automated Trading",
   description:
     "Deploy, backtest, and master algorithmic trading with institutional-grade simplicity. Powered by Deriv.",
-    generator: 'v0.app'
+  generator: 'v0.app',
+  icons: {
+    icon: '/icon.svg',
+    apple: '/apple-icon.png',
+  },
 }
 
 export default function RootLayout({

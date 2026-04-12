@@ -122,7 +122,7 @@ function FloatingParticles() {
       const y = (Math.random() - 0.5) * 10
 
       newParticles.push({
-        position: [x, y, z],
+        position: [x, y, z] as [number, number, number],
         speed: 0.2 + Math.random() * 0.3,
         size: 0.05 + Math.random() * 0.1,
         color: Math.random() > 0.7 ? "#14b8a6" : "#f0f0f0",
@@ -178,8 +178,8 @@ function DataFlowLines() {
         <MeshDistortMaterial
           color="#14b8a6"
           attach="material"
-          distort={0.3}
-          speed={2}
+          distort={0.25}
+          speed={1.5}
           wireframe
           transparent
           opacity={0.2}
