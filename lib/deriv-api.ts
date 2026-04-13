@@ -268,7 +268,9 @@ class DerivAPI {
                     console.log("[DerivAPI] Mapping account:", acct, "→ loginid:", loginid)
                     return {
                         loginid,
-                        is_virtual: acct.is_virtual === true || acct.is_virtual === 1 ? 1 : 0,
+                        // V2 REST API uses account_type: "demo"/"real" instead of is_virtual
+                        is_virtual: acct.account_type === "demo" || acct.is_virtual === true || acct.is_virtual === 1 ? 1 : 0,
+                        account_type: acct.account_type,
                         currency: acct.currency || acct.account_currency || "USD",
                         balance: acct.balance,
                         token: activeToken

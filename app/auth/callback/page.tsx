@@ -136,15 +136,11 @@ function AuthCallbackContent() {
 
           if (legacyAccounts.length > 0) {
               console.log("[Callback] Legacy account tokens found alongside V2 code:", legacyAccounts.map(a => a.account))
-              // Use legacy accounts list (they have real CR/VRTC IDs)
               accountList.push(...legacyAccounts)
-              // Set the primary (prefer real over demo)
               const primary = accountList.find(a => !a.isDemo) || accountList[0]
               localStorage.setItem("derivex_acct", primary.account)
-              // Also store per-account tokens for the legacy WS fallback
               console.log("[Callback] Primary account set to:", primary.account)
           } else {
-              // No legacy tokens — try V2 REST account list
               console.log("[Callback] No legacy tokens. Fetching V2 account list via REST...")
               const listResponse = await derivAPI.getAccountList(primaryToken)
               console.log("[Callback] V2 account list response:", listResponse)
@@ -153,11 +149,13 @@ function AuthCallbackContent() {
                       token: primaryToken,
                       account: acc.loginid,
                       currency: acc.currency || "USD",
-                      isDemo: acc.is_virtual === 1
+                      // V2 REST uses account_type field, not is_virtual
+                      isDemo: acc.account_type === "demo" || acc.is_virtual === 1
                   })))
+                  // Prefer real account; demo accounts start with DOT, real with ROT
                   const primary = accountList.find(a => !a.isDemo) || accountList[0]
                   localStorage.setItem("derivex_acct", primary.account)
-                  console.log("[Callback] Primary account set to:", primary.account)
+                  console.log("[Callback] Primary account set to:", primary.account, "isDemo:", primary.isDemo)
               } else {
                   console.warn("[Callback] No accounts found. Will resolve after authorize().")
                   accountList.push({ token: primaryToken, account: "UNKNOWN_V2", currency: "USD" })
@@ -228,14 +226,17 @@ function AuthCallbackContent() {
 
         if (authFlow === "new_v2") {
             try {
-                const profileRes = await fetch(`${derivConfig.OAUTH_URL}/userinfo`, {
+                // Call our server-side proxy to avoid CORS — auth.deriv.com blocks direct browser requests
+                const profileRes = await fetch(`/api/auth/deriv/userinfo`, {
                     headers: { "Authorization": `Bearer ${primaryToken}` }
                 })
                 if (profileRes.ok) {
                     const profile = await profileRes.json()
                     console.log("[Callback] V2 userinfo:", profile)
                     userProfile.email = profile.email || userProfile.email
-                    userProfile.fullname = profile.name || profile.given_name + (profile.family_name ? " " + profile.family_name : "") || userProfile.fullname
+                    userProfile.fullname = profile.name ||
+                        ((profile.given_name || "") + (profile.family_name ? " " + profile.family_name : "")).trim() ||
+                        userProfile.fullname
                 }
             } catch (e) {
                 console.warn("[Callback] Could not fetch userinfo:", e)
