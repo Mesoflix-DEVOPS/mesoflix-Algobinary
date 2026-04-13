@@ -15,7 +15,8 @@ import {
   ChevronRight,
   Menu,
   Users,
-  LineChart
+  LineChart,
+  LifeBuoy
 } from "lucide-react"
 import {
   Sidebar,
@@ -84,6 +85,7 @@ export function AppSidebar() {
 
   const systemNav = [
     { title: "News & Updates", href: "/news", icon: Newspaper },
+    { title: "Support", href: "/support", icon: LifeBuoy },
     { title: "Settings", href: "/settings", icon: Settings },
   ]
 
