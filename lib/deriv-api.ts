@@ -24,7 +24,10 @@ class DerivAPI {
         this.currentAuthFlow = (localStorage.getItem("derivex_auth_flow") as any) || "new_v2"
     }
     
-    const appId = this.currentAuthFlow === "new_v2" ? derivConfig.CLIENT_ID : derivConfig.LEGACY_APP_ID
+    // Deriv WebSocket protocol currently mandates a numeric app_id for the transport layer,
+    // regardless of whether the session token was acquired via V1 or V2 PKCE flow.
+    // The alphanumeric CLIENT_ID is strictly for the OAuth2 authorization and token endpoints.
+    const appId = derivConfig.LEGACY_APP_ID
     const wsUrl = `wss://ws.derivws.com/websockets/v3?app_id=${appId}`
     
     this.connectionPromise = new Promise((resolve, reject) => {
