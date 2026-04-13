@@ -44,7 +44,6 @@ export default function LoginPage() {
       document.cookie = `pkce_code_verifier=${codeVerifier}; path=/; max-age=3600; SameSite=Lax`
 
       const appId = "32yJRED9hXmlYiayhK1VZ"
-      const legacyAppId = "114779"
       const redirectUri = `${window.location.origin}/auth/callback`
       
       const authUrl = new URL('https://oauth.deriv.com/oauth2/authorize')
@@ -55,7 +54,6 @@ export default function LoginPage() {
       authUrl.searchParams.set('state', state)
       authUrl.searchParams.set('code_challenge', codeChallenge)
       authUrl.searchParams.set('code_challenge_method', 'S256')
-      authUrl.searchParams.set('app_id', legacyAppId) // This tells Deriv where to route legacy token users
       
       window.location.href = authUrl.toString()
     } catch (error) {
