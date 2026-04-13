@@ -64,8 +64,12 @@ function AuthCallbackContent() {
   const searchParams = useSearchParams()
   const [step, setStep] = React.useState<AuthStep>("EXTRACTING")
   const [errorMsg, setErrorMsg] = React.useState<string | null>(null)
+  const processingRef = React.useRef(false)
 
   React.useEffect(() => {
+    if (processingRef.current) return
+    processingRef.current = true
+
     async function processAuth() {
       try {
         // 1. EXTRACTING
