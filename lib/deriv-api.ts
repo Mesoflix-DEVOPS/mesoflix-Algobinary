@@ -1,9 +1,6 @@
-// Deriv API Integration
-// V2 App ID: 32yJRED9hXmlYiayhK1VZ
-// Legacy App ID: 114779
+import { derivConfig } from "./deriv-config"
 
-const V2_APP_ID = process.env.NEXT_PUBLIC_DERIV_APP_ID || "32yJRED9hXmlYiayhK1VZ"
-const LEGACY_APP_ID = "114779"
+// Deriv API Integration
 
 class DerivAPI {
   private ws: WebSocket | null = null
@@ -13,7 +10,7 @@ class DerivAPI {
   private isConnected = false
   private pingInterval: any = null
   private connectionPromise: Promise<void> | null = null
-  public currentAuthFlow: "legacy" | "new_v2" = "legacy"
+  public currentAuthFlow: "legacy" | "new_v2" = "new_v2"
 
   async connect(): Promise<void> {
     if (this.connectionPromise && (this.ws?.readyState === WebSocket.CONNECTING || this.ws?.readyState === WebSocket.OPEN)) {
@@ -24,10 +21,10 @@ class DerivAPI {
     
     // Determine which app ID to use based on the saved auth flow
     if (typeof window !== "undefined") {
-        this.currentAuthFlow = (localStorage.getItem("derivex_auth_flow") as any) || "legacy"
+        this.currentAuthFlow = (localStorage.getItem("derivex_auth_flow") as any) || "new_v2"
     }
     
-    const appId = this.currentAuthFlow === "new_v2" ? V2_APP_ID : LEGACY_APP_ID
+    const appId = this.currentAuthFlow === "new_v2" ? derivConfig.CLIENT_ID : derivConfig.LEGACY_APP_ID
     const wsUrl = `wss://ws.derivws.com/websockets/v3?app_id=${appId}`
     
     this.connectionPromise = new Promise((resolve, reject) => {

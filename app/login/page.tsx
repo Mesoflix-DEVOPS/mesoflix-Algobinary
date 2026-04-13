@@ -5,6 +5,7 @@ import dynamic from "next/dynamic"
 import { Button } from "@/components/ui/button"
 import { Lock, Loader2 } from "lucide-react"
 import { useState } from "react"
+import { derivConfig } from "@/lib/deriv-config"
 
 const MainScene = dynamic(() => import("@/components/main-scene").then(mod => mod.MainScene), {
   ssr: false,
@@ -43,20 +44,18 @@ export default function LoginPage() {
       document.cookie = `oauth_state=${state}; path=/; max-age=3600; SameSite=Lax`
       document.cookie = `pkce_code_verifier=${codeVerifier}; path=/; max-age=3600; SameSite=Lax`
 
-      const appId = "32yJRED9hXmlYiayhK1VZ"
       const redirectUri = `${window.location.origin}/auth/callback`
       
-      const authUrl = new URL('https://oauth.deriv.com/oauth2/authorize')
+      const authUrl = new URL(`${derivConfig.OAUTH_URL}/oauth2/authorize`)
       authUrl.searchParams.set('response_type', 'code')
-      authUrl.searchParams.set('client_id', appId)
-      authUrl.searchParams.set('app_id', appId) // Hidden Deriv Requirement
+      authUrl.searchParams.set('client_id', derivConfig.CLIENT_ID)
       authUrl.searchParams.set('redirect_uri', redirectUri)
       authUrl.searchParams.set('state', state)
       authUrl.searchParams.set('code_challenge', codeChallenge)
       authUrl.searchParams.set('code_challenge_method', 'S256')
       
       // Append scope manually to prevent URLSearchParams from using + instead of %20, which breaks Deriv's parser
-      const finalUrl = `${authUrl.toString()}&scope=read%20trade`
+      const finalUrl = `${authUrl.toString()}&scope=trade%20account_manage`
       
       window.location.href = finalUrl
     } catch (error) {

@@ -13,6 +13,7 @@ import {
 import { derivAPI } from "@/lib/deriv-api"
 import { supabase } from "@/lib/db"
 import { cn } from "@/lib/utils"
+import { derivConfig } from "@/lib/deriv-config"
 
 type AuthStep = "EXTRACTING" | "CONNECTING" | "AUTHORIZING" | "SYNCING" | "FINALIZING" | "ERROR"
 
@@ -90,16 +91,15 @@ function AuthCallbackContent() {
           }
 
           setStep("CONNECTING") // We are doing network call, move to connecting visually
-          const appId = "32yJRED9hXmlYiayhK1VZ"
           
           const params = new URLSearchParams()
           params.append('grant_type', 'authorization_code')
-          params.append('client_id', appId)
+          params.append('client_id', derivConfig.CLIENT_ID)
           params.append('code', code)
           params.append('code_verifier', codeVerifier)
           params.append('redirect_uri', `${window.location.origin}/auth/callback`)
 
-          const response = await fetch('https://oauth.deriv.com/oauth2/token', {
+          const response = await fetch(`${derivConfig.OAUTH_URL}/oauth2/token`, {
              method: 'POST',
              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
              body: params.toString()
