@@ -209,40 +209,63 @@ export default function AdminLoginPage() {
                         </div>
                     )}
 
-                    <form onSubmit={handleLogin} className="space-y-4">
-                        <Label className="text-[10px] font-black uppercase tracking-widest text-gray-400 text-center block">Verification Token</Label>
-                        <div className="relative group">
-                            <QrCode className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600 group-focus-within:text-teal-500 transition-colors" />
-                            <Input 
-                                type="text"
-                                maxLength={6}
-                                placeholder="000000"
-                                className="bg-white/5 border-white/10 text-white h-12 pl-12 rounded-xl text-center text-lg tracking-[0.5em] font-black focus:ring-teal-500/20"
-                                value={twoFactorCode}
-                                onChange={(e) => setTwoFactorCode(e.target.value)}
-                                required
-                            />
-                        </div>
-
+                    <form onSubmit={handleLogin} className="space-y-6">
                         {mode === "REGISTER" && !confirmedRecovery ? (
-                            <div className="p-4 rounded-2xl bg-teal-500/5 border border-teal-500/20 space-y-3">
-                                <div className="flex items-center gap-2 text-teal-500 text-[10px] font-black uppercase">
-                                    <Download className="w-3 h-3" />
-                                    Recovery Logic Required
+                            <div className="space-y-4">
+                                <div className="p-4 rounded-2xl bg-teal-500/5 border border-teal-500/20 space-y-4">
+                                    <div className="flex items-center gap-2 text-teal-500 text-[10px] font-black uppercase">
+                                        <Download className="w-3 h-3" />
+                                        Step 1: Security Recovery
+                                    </div>
+                                    <p className="text-[10px] text-gray-500 italic leading-relaxed">
+                                        You MUST download these recovery codes. If you lose your phone, these are the ONLY way to access the dashboard.
+                                    </p>
+                                    <Button 
+                                        type="button" 
+                                        onClick={handleDownloadRecovery}
+                                        className="w-full bg-teal-600 hover:bg-teal-500 text-[10px] font-black uppercase h-10 rounded-xl shadow-lg shadow-teal-500/20 transition-all active:scale-95"
+                                    >
+                                        Download Security Codes
+                                    </Button>
                                 </div>
-                                <p className="text-[9px] text-gray-500 italic">You must download and confirm these recovery codes to proceed.</p>
+                                
                                 <Button 
-                                    type="button" 
-                                    onClick={handleDownloadRecovery}
-                                    className="w-full bg-teal-600 hover:bg-teal-500 text-[10px] font-black uppercase h-8 rounded-lg"
+                                    type="button"
+                                    disabled={!confirmedRecovery}
+                                    className="w-full h-12 bg-white/5 border border-white/10 text-gray-500 text-[10px] font-black uppercase rounded-xl cursor-not-allowed"
                                 >
-                                    Download Codes
+                                    Waiting for Download...
                                 </Button>
                             </div>
                         ) : (
-                            <Button className="w-full h-12 bg-white text-black hover:bg-teal-500 hover:text-white transition-all rounded-xl font-black uppercase tracking-widest group border-none">
-                                {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Verify & Access"}
-                            </Button>
+                            <div className="space-y-6 bg-white/[0.02] p-4 rounded-2xl border border-white/5 animate-in fade-in zoom-in-95 duration-300">
+                                <div className="space-y-2 text-center">
+                                    <Label className="text-[10px] font-black uppercase tracking-widest text-teal-500 block">Step 2: Authenticator Code</Label>
+                                    <p className="text-[9px] text-gray-600 font-bold uppercase tracking-tighter">Enter the 6-digit code from your app</p>
+                                </div>
+                                
+                                <div className="relative group">
+                                    <QrCode className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-600 group-focus-within:text-teal-400 transition-colors" />
+                                    <Input 
+                                        type="text"
+                                        maxLength={6}
+                                        placeholder="000 000"
+                                        className="bg-black/40 border-white/10 text-white h-14 pl-14 rounded-2xl text-center text-2xl tracking-[0.5em] font-black focus:ring-teal-500/20 focus:border-teal-500/50"
+                                        value={twoFactorCode}
+                                        onChange={(e) => setTwoFactorCode(e.target.value.replace(/\D/g, ""))}
+                                        required
+                                        autoFocus
+                                    />
+                                </div>
+
+                                <Button className="w-full h-14 bg-teal-600 hover:bg-teal-500 text-white shadow-2xl shadow-teal-500/20 transition-all rounded-2xl font-black uppercase tracking-widest group border-none">
+                                    {isLoading ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : (
+                                        <span className="flex items-center justify-center gap-2">
+                                            Confirm Identity <Check className="w-5 h-5" />
+                                        </span>
+                                    )}
+                                </Button>
+                            </div>
                         )}
                     </form>
 
