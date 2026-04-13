@@ -73,6 +73,8 @@ function AuthCallbackContent() {
         const stateParam = searchParams.get("state")
         const accountList: any[] = []
         let primaryToken = ""
+        let refreshToken = ""
+        let tokenExpiry = 0
         let authFlow: "legacy" | "new_v2" = "legacy"
         
         if (code && stateParam) {
@@ -92,30 +94,25 @@ function AuthCallbackContent() {
 
           setStep("CONNECTING") // We are doing network call, move to connecting visually
           
-          const params = new URLSearchParams()
-          params.append('grant_type', 'authorization_code')
-          params.append('client_id', derivConfig.CLIENT_ID)
-          params.append('code', code)
-          params.append('code_verifier', codeVerifier)
-          params.append('redirect_uri', `${window.location.origin}/auth/callback`)
-
-          const response = await fetch(`${derivConfig.OAUTH_URL}/oauth2/token`, {
+          const response = await fetch('/api/auth/deriv/token', {
              method: 'POST',
-             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-             body: params.toString()
+             headers: { 'Content-Type': 'application/json' },
+             body: JSON.stringify({ code, codeVerifier })
           })
 
           if (!response.ok) {
              const errData = await response.json()
-             throw new Error(errData.error_description || "Token exchange failed.")
+             throw new Error(errData.error || "Token exchange failed.")
           }
 
           const data = await response.json()
           primaryToken = data.access_token
+          refreshToken = data.refresh_token || ""
+          tokenExpiry = data.expires_in || 0
 
           accountList.push({
              token: primaryToken,
-             account: "OAuth2", // Temporarily set, real account fetched during authorize() below
+             account: "FETCHING_V2", // Temporarily set, real account fetched during authorize() below
              currency: "USD" 
           })
 
@@ -163,6 +160,27 @@ function AuthCallbackContent() {
           throw new Error(authResponse.error.message)
         }
 
+        // --- NEW: FETCH ACCOUNT LIST FOR V2 ---
+        if (authFlow === "new_v2") {
+            const listResponse = await derivAPI.getAccountList()
+            if (listResponse.error) {
+                console.error("Failed to fetch V2 account list:", listResponse.error)
+            } else if (listResponse.account_list && listResponse.account_list.length > 0) {
+                // Clear the temporary account placeholder
+                accountList.length = 0;
+                
+                // Populate the unified array with every real/demo account found
+                listResponse.account_list.forEach((acc: any) => {
+                    accountList.push({
+                        token: primaryToken, // Re-use global access token for V2 wrapper
+                        account: acc.loginid,
+                        currency: acc.currency || "USD",
+                        isDemo: acc.is_virtual === 1
+                    })
+                })
+            }
+        }
+
         await new Promise(r => setTimeout(r, 800))
         setStep("SYNCING")
 
@@ -170,12 +188,14 @@ function AuthCallbackContent() {
         const userData = authResponse.authorize
         
         // Correct the acct if we are in V2 flow where it wasn't available in URL
-        if (authFlow === "new_v2") {
+        if (authFlow === "new_v2" && accountList.length === 1 && accountList[0].account === "FETCHING_V2") {
             accountList[0].account = userData.loginid
             accountList[0].currency = userData.currency || "USD"
         }
 
-        const primaryAccount = accountList[0]
+        const primaryAccount = accountList[0] || { account: userData.loginid }
+
+        const expiryDate = tokenExpiry > 0 ? new Date(Date.now() + tokenExpiry * 1000).toISOString() : null
 
         const { error: dbError } = await supabase.from("users").upsert({
           email: userData.email,
@@ -183,6 +203,8 @@ function AuthCallbackContent() {
           full_name: userData.fullname,
           deriv_account_id: userData.loginid,
           deriv_token: primaryToken,
+          deriv_refresh_token: refreshToken || null,
+          deriv_access_token_expires_at: expiryDate,
           balance: userData.balance || 0,
           auth_flow: authFlow // Save the specific flow used
         }, { onConflict: 'email' })

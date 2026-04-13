@@ -149,6 +149,10 @@ class DerivAPI {
     return this.send({ authorize: token })
   }
 
+  async getAccountList(): Promise<any> {
+    return this.send({ account_list: 1 })
+  }
+
   async getActiveSymbols(): Promise<any> {
     return this.send({ active_symbols: "brief" })
   }
