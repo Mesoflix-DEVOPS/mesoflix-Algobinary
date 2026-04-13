@@ -9,7 +9,8 @@ import {
   MoreVertical,
   Circle,
   Loader2,
-  Paperclip
+  Paperclip,
+  MessageSquare
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"

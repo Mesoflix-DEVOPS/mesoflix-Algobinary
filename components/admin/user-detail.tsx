@@ -27,6 +27,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts"
 import { supabase } from "@/lib/db"
+import { cn } from "@/lib/utils"
 
 interface UserDetailProps {
   user: any | null

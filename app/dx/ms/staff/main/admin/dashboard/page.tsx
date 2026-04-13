@@ -495,7 +495,9 @@ export default function AdminDashboard() {
                             <DialogContent className="bg-zinc-950 border-white/10 text-white">
                                 <DialogHeader>
                                     <DialogTitle className="font-black uppercase tracking-widest">New Transmission</DialogTitle>
-                                    <DialogDescription>Input the article data for global distribution.</DialogDescription>
+                                    <DialogDescription className="text-gray-500 text-xs">
+                                        Input the article data for global distribution. All traders will receive this update instantly.
+                                    </DialogDescription>
                                 </DialogHeader>
                                 <div className="space-y-4 py-4">
                                     <div className="space-y-2">
