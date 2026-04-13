@@ -161,6 +161,50 @@ export function BotSettings({ settings, setSettings, disabled }: BotSettingsProp
                 ))}
                 </SelectContent>
             </Select>
+            {/* Over/Under Barriers */}
+            <div className="mt-4 space-y-3">
+              <Label className="text-[10px] uppercase font-bold text-muted-foreground">Over Barrier</Label>
+              <Input
+                disabled={disabled}
+                type="number"
+                value={settings.overBarrier}
+                onChange={(e) => update('overBarrier', Number(e.target.value))}
+                className="bg-white/5 border-white/10 h-8"
+              />
+              <Label className="text-[10px] uppercase font-bold text-muted-foreground">Under Barrier</Label>
+              <Input
+                disabled={disabled}
+                type="number"
+                value={settings.underBarrier}
+                onChange={(e) => update('underBarrier', Number(e.target.value))}
+                className="bg-white/5 border-white/10 h-8"
+              />
+            </div>
+            {/* Recovery Strategy */}
+            <div className="mt-4 space-y-3">
+              <Label className="text-[10px] uppercase font-bold text-muted-foreground">Recovery Strategy</Label>
+              <Select disabled={disabled} value={settings.recoveryStrategy} onValueChange={(v) => update('recoveryStrategy', v)}>
+                <SelectTrigger className="bg-white/5 border-white/10 h-9 font-bold">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="martingale">Martingale</SelectItem>
+                  <SelectItem value="fixed">Fixed Step</SelectItem>
+                </SelectContent>
+              </Select>
+              {settings.recoveryStrategy === 'fixed' && (
+                <>
+                  <Label className="text-[10px] uppercase font-bold text-muted-foreground">Recovery Step (USD)</Label>
+                  <Input
+                    disabled={disabled}
+                    type="number"
+                    value={settings.recoveryStep}
+                    onChange={(e) => update('recoveryStep', Number(e.target.value))}
+                    className="bg-white/5 border-white/10 h-8"
+                  />
+                </>
+              )}
+            </div>
           </div>
 
           <div className="space-y-3">

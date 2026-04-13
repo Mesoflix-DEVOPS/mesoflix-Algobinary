@@ -157,11 +157,21 @@ class DerivAPI {
     })
   }
 
+  async fetchTicks(symbol: string, count: number = 100): Promise<any> {
+    return this.send({
+      ticks_history: symbol,
+      count,
+      end: "latest",
+      style: "tick",
+    })
+  }
+
   async buyContract(params: {
     contractType: string
     currency: string
     amount: number
     duration: number
+    duration_unit: "m" | "h" | "d"
     symbol: string
     barrier?: string
   }): Promise<any> {
@@ -173,7 +183,7 @@ class DerivAPI {
         contract_type: params.contractType,
         currency: params.currency,
         duration: params.duration,
-        duration_unit: "m",
+        duration_unit: params.duration_unit,
         symbol: params.symbol,
       },
       price: params.amount 

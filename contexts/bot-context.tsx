@@ -5,7 +5,7 @@ import { derivAPI } from '@/lib/deriv-api'
 import { supabase } from '@/lib/db'
 
 export type BotState = 'IDLE' | 'SCANNING' | 'IN_TRADE' | 'COOLDOWN' | 'STOPPED'
-export type TradeMode = 'TOUCH' | 'NO_TOUCH'
+export type TradeMode = 'TOUCH' | 'NO_TOUCH' | 'OVER_UNDER'
 
 interface TradeSettings {
   stake: number
@@ -19,6 +19,10 @@ interface TradeSettings {
   tradeMode: TradeMode
   kMultiplier: number
   volatilityThreshold: number
+  overBarrier: number
+  underBarrier: number
+  recoveryStrategy: 'martingale' | 'fixed'
+  recoveryStep: number
   activeToken?: string
   activeAcct?: string
   toolId: string
@@ -47,6 +51,8 @@ interface StrategicMetrics {
   trendStrength: number 
   trendDirection: 'sideways' | 'bullish' | 'bearish'
   barrierDistance: number
+  tickHistogram: number[] // length 10, frequency of last digit
+  recentAvg: number // average of last 1000 ticks
 }
 
 export interface Trade {
@@ -93,6 +99,10 @@ const DEFAULT_SETTINGS: TradeSettings = {
   tradeMode: 'NO_TOUCH',
   kMultiplier: 10,
   volatilityThreshold: 0.5,
+  overBarrier: 2,
+  underBarrier: 8,
+  recoveryStrategy: 'martingale',
+  recoveryStep: 10,
   toolId: ''
 }
 
@@ -111,7 +121,7 @@ export function BotProvider({ children }: { children: React.ReactNode }) {
   const [balance, setBalance] = useState<number | null>(null)
   const [currency, setCurrency] = useState<string>("USD")
   const [metrics, setMetrics] = useState<StrategicMetrics>({
-    volatility: 0, trendStrength: 0, trendDirection: 'sideways', barrierDistance: 0
+    volatility: 0, trendStrength: 0, trendDirection: 'sideways', barrierDistance: 0, tickHistogram: [], recentAvg: 0
   })
   const [tradeHistory, setTradeHistory] = useState<Trade[]>([])
 
@@ -182,14 +192,27 @@ export function BotProvider({ children }: { children: React.ReactNode }) {
             await derivAPI.unsubscribe(tickSubId.current)
             tickSubId.current = null
         }
-        tickSubId.current = await derivAPI.subscribeToTicks(settings.market, (tick) => {
+        tickSubId.current = await derivAPI.subscribeToTicks(settings.market, async (tick) => {
             if (!isSubscribed) return
             const price = Number(tick.quote)
             setLivePrice(price)
+            // Update tick buffer (max 1000)
             tickBuffer.current.push(price)
-            if (tickBuffer.current.length > 50) tickBuffer.current.shift()
+            if (tickBuffer.current.length > 1000) tickBuffer.current.shift()
+            // Persist to localStorage
+            try {
+              localStorage.setItem(`derivex_ticks_${settings.market}`, JSON.stringify(tickBuffer.current))
+            } catch (e) { console.error('Failed to persist ticks', e) }
             const newMetrics = analyzeMarket()
-            if (newMetrics) setMetrics(newMetrics)
+            if (newMetrics) setMetrics(prev => ({ ...prev, ...newMetrics }))
+            // Also compute histogram and recent average
+            const hist = new Array(10).fill(0)
+            tickBuffer.current.forEach(t => {
+              const digit = Math.floor(t) % 10
+              hist[digit]++
+            })
+            const avg = tickBuffer.current.reduce((a, b) => a + b, 0) / tickBuffer.current.length
+            setMetrics(prev => ({ ...prev, tickHistogram: hist, recentAvg: avg }))
         })
     }
     setupTickSub()
@@ -326,14 +349,35 @@ export function BotProvider({ children }: { children: React.ReactNode }) {
     if (stateRef.current !== 'SCANNING' || !livePrice) return
     
     try {
-      const type = settings.tradeMode === 'TOUCH' ? 'ONETOUCH' : 'NOTOUCH'
-      const barrier = `+${computedBarrier.toFixed(2)}`
+      // Determine contract type based on mode
+      let contractType: string
+      let barrier: string
+      if (settings.tradeMode === 'OVER_UNDER') {
+        if (livePrice > settings.overBarrier) {
+          contractType = 'CALL'
+          barrier = `${settings.overBarrier}`
+        } else if (livePrice < settings.underBarrier) {
+          contractType = 'PUT'
+          barrier = `${settings.underBarrier}`
+        } else {
+          // Price not beyond barriers, skip trade
+          return
+        }
+      } else {
+        contractType = settings.tradeMode === 'TOUCH' ? 'ONETOUCH' : 'NOTOUCH'
+        barrier = `+${computedBarrier.toFixed(2)}`
+      }
       
-      addLog('ENTRY', `Targeting Barrier ${barrier} (${settings.tradeMode})`, 'SUCCESS')
+      addLog('ENTRY', `Placing ${contractType} contract at barrier ${barrier}`, 'SUCCESS')
       
       const resp = await derivAPI.buyContract({
-        contractType: type, currency: 'USD', amount: settings.stake,
-        duration: 2, symbol: settings.market, barrier: barrier
+        contractType,
+        currency: 'USD',
+        amount: settings.stake,
+        duration: 2,
+        symbol: settings.market,
+        barrier,
+        duration_unit: 'm'
       })
 
       if (resp.error) {
@@ -399,6 +443,12 @@ export function BotProvider({ children }: { children: React.ReactNode }) {
       stateRef.current = 'IN_TRADE'
     } catch (err: any) {
       addLog('ERROR', err.message || 'Execution failed', 'ERROR')
+      // Apply recovery strategy
+      if (settings.recoveryStrategy === 'martingale') {
+        setSettings(prev => ({ ...prev, stake: prev.stake * 2 }))
+      } else if (settings.recoveryStrategy === 'fixed') {
+        setSettings(prev => ({ ...prev, stake: prev.stake + settings.recoveryStep }))
+      }
       setState('SCANNING')
       stateRef.current = 'SCANNING'
     }
@@ -426,18 +476,28 @@ export function BotProvider({ children }: { children: React.ReactNode }) {
             lastCooldownCount.current = stats.trades
             setState('COOLDOWN')
             stateRef.current = 'COOLDOWN'
-            setCooldownTime(60)
-            addLog('COOLDOWN', 'Milestone Reached. Cooling down for 60s.', 'WARNING')
+            setCooldownTime(settings.cooldownDuration * 60)
+            addLog('COOLDOWN', `Milestone Reached. Cooling down for ${settings.cooldownDuration} minute(s).`, 'WARNING')
             return
         }
-        if (metrics.volatility > 0) {
+        // Over/Under logic
+        if (settings.tradeMode === 'OVER_UNDER') {
+            if (livePrice && livePrice > settings.overBarrier) {
+                executeTrade(settings.overBarrier)
+            } else if (livePrice && livePrice < settings.underBarrier) {
+                executeTrade(settings.underBarrier)
+            }
+        } else if (metrics.volatility > 0) {
             const isSafe = metrics.volatility < settings.volatilityThreshold
             const isSideways = metrics.trendDirection === 'sideways'
-            if (settings.tradeMode === 'NO_TOUCH' && isSafe && isSideways) executeTrade(metrics.barrierDistance)
-            else if (settings.tradeMode === 'TOUCH' && !isSideways && metrics.volatility > settings.volatilityThreshold * 0.5) executeTrade(metrics.barrierDistance * 0.5)
+            if (settings.tradeMode === 'NO_TOUCH' && isSafe && isSideways) {
+                executeTrade(metrics.barrierDistance)
+            } else if (settings.tradeMode === 'TOUCH' && !isSideways && metrics.volatility > settings.volatilityThreshold * 0.5) {
+                executeTrade(metrics.barrierDistance * 0.5)
+            }
         }
     }
-  }, [state, stats, settings, cooldownTime, metrics, executeTrade, addLog])
+  }, [state, stats, settings, cooldownTime, metrics, executeTrade, addLog, livePrice])
 
   // Cooldown Timer
   useEffect(() => {
