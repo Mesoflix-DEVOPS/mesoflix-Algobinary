@@ -159,7 +159,7 @@ export default function ChartingPage() {
                             ? (data.isUp ? "bg-green-500" : "bg-red-500") 
                             : "bg-teal-500/30"
                         )}
-                        style={{ height: \`\${heightPercent}%\` }}
+                        style={{ height: `${heightPercent}%` }}
                       />
                     )
                   })}
