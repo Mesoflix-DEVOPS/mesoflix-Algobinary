@@ -38,10 +38,34 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 import { supabase } from "@/lib/db"
+import { SupportChat } from "@/components/admin/support-chat"
+import { UserDetailDrawer } from "@/components/admin/user-detail"
+
+import {
+  Sheet,
+  SheetContent,
+  SheetTrigger,
+} from "@/components/ui/sheet"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = React.useState("overview")
   const [users, setUsers] = React.useState<any[]>([])
+  const [selectedUser, setSelectedUser] = React.useState<any | null>(null)
+  const [isDetailOpen, setIsDetailOpen] = React.useState(false)
+  const [stats, setStats] = React.useState({
+    activeTraders: 0,
+    globalVolume: 0,
+    uptime: "99.99%",
+    reports: 0
+  })
   const [news, setNews] = React.useState<any[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
   const [searchQuery, setSearchQuery] = React.useState("")
@@ -51,11 +75,35 @@ export default function AdminDashboard() {
     async function fetchData() {
       setIsLoading(true)
       try {
-        const { data: usersData } = await supabase.from("users").select("*").order("created_at", { ascending: false })
-        const { data: newsData } = await supabase.from("trading_news").select("*").order("created_at", { ascending: false })
+        // 1. Fetch Users
+        const { data: usersData, count: userCount } = await supabase
+          .from("users")
+          .select("*", { count: "exact" })
+          .order("created_at", { ascending: false })
+        
+        // 2. Fetch Global Volume (Sum of trades)
+        const { data: tradesData } = await supabase
+          .from("trades")
+          .select("profit_loss")
+          .not("profit_loss", "is", null)
+        
+        const totalVol = tradesData?.reduce((acc: number, curr: any) => acc + Math.abs(Number(curr.profit_loss)), 0) || 0
+        
+        // 3. Fetch News
+        const { data: newsData } = await supabase
+          .from("trading_news")
+          .select("*")
+          .order("created_at", { ascending: false })
         
         if (usersData) setUsers(usersData)
         if (newsData) setNews(newsData)
+        
+        setStats({
+          activeTraders: userCount || 0,
+          globalVolume: totalVol,
+          uptime: "99.98%",
+          reports: 0 // Placeholder until reporting system is live
+        })
       } catch (err) {
         console.error("Fetch error:", err)
       } finally {
@@ -71,6 +119,9 @@ export default function AdminDashboard() {
         const { error } = await supabase.from("users").update({ status: nextStatus }).eq("deriv_account_id", userId)
         if (!error) {
             setUsers(prev => prev.map(u => u.deriv_account_id === userId ? { ...u, status: nextStatus } : u))
+            if (selectedUser?.deriv_account_id === userId) {
+                setSelectedUser((prev: any) => ({ ...prev, status: nextStatus }))
+            }
         }
     } catch (err) {
         console.error("Update error:", err)
@@ -90,11 +141,9 @@ export default function AdminDashboard() {
     }
   }
 
-  return (
-    <div className="min-h-screen bg-black text-white font-sans flex flex-col md:flex-row">
-      {/* Sidebar */}
-      <aside className="w-full md:w-64 border-r border-white/5 bg-zinc-950 flex flex-col pt-8 shrink-0">
-         <div className="px-6 mb-12 flex items-center gap-3">
+  const SidebarContent = () => (
+    <div className="flex flex-col h-full py-8">
+        <div className="px-6 mb-12 flex items-center gap-3">
             <div className="p-2 bg-teal-500 rounded-lg">
                 <ShieldAlert className="w-5 h-5 text-white" />
             </div>
@@ -102,9 +151,9 @@ export default function AdminDashboard() {
                 <span className="text-sm font-black uppercase tracking-tighter">Admin Central</span>
                 <span className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">Internal Control</span>
             </div>
-         </div>
+        </div>
 
-         <nav className="flex-1 px-4 space-y-2">
+        <nav className="flex-1 px-4 space-y-2">
             {[
                 { id: "overview", label: "Dashboard", icon: BarChart3 },
                 { id: "users", label: "User Control", icon: Users },
@@ -124,53 +173,85 @@ export default function AdminDashboard() {
                     {item.label}
                 </button>
             ))}
-         </nav>
+        </nav>
 
-         <div className="p-4 mt-auto border-t border-white/5">
+        <div className="p-4 mt-auto border-t border-white/5">
             <Button variant="ghost" className="w-full justify-start text-red-500 hover:bg-red-500/10 rounded-xl" onClick={() => window.location.href = "/"}>
                 <LogOut className="w-4 h-4 mr-2" />
                 Terminal Logout
             </Button>
-         </div>
+        </div>
+    </div>
+  )
+
+  return (
+    <div className="min-h-screen bg-black text-white font-sans flex flex-col md:flex-row h-screen overflow-hidden">
+      {/* Sidebar - Desktop */}
+      <aside className="hidden md:flex w-64 border-r border-white/5 bg-zinc-950 flex-col shrink-0">
+         <SidebarContent />
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 min-w-0 bg-black p-4 md:p-10 overflow-y-auto">
-        <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
-            <div>
-                <h1 className="text-3xl font-black uppercase tracking-tighter text-white flex items-center gap-3">
-                    {activeTab === "overview" && "System Overview"}
-                    {activeTab === "users" && "User Terminal"}
-                    {activeTab === "news" && "News Desk"}
-                    {activeTab === "broadcast" && "Communications"}
-                    {activeTab === "settings" && "Harden Security"}
-                    <Badge className="bg-teal-500/10 text-teal-500 border-teal-500/20">LIVE</Badge>
-                </h1>
-                <p className="text-gray-500 text-sm mt-1 font-medium italic">Administrative oversight and institutional control panel</p>
+      <main className="flex-1 min-w-0 bg-black flex flex-col overflow-hidden">
+        {/* Responsive Header */}
+        <header className="border-b border-white/5 bg-zinc-950/50 backdrop-blur-md p-4 md:p-6 flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-4">
+                <Sheet>
+                    <SheetTrigger asChild>
+                        <Button variant="ghost" size="icon" className="md:hidden text-white">
+                            <Menu className="w-6 h-6" />
+                        </Button>
+                    </SheetTrigger>
+                    <SheetContent side="left" className="bg-zinc-950 border-white/5 p-0 w-64">
+                        <SidebarContent />
+                    </SheetContent>
+                </Sheet>
+                <div>
+                    <h1 className="text-xl md:text-2xl font-black uppercase tracking-tighter text-white flex items-center gap-3">
+                        {activeTab === "overview" && "System Overview"}
+                        {activeTab === "users" && "User Terminal"}
+                        <Badge className="bg-teal-500/10 text-teal-500 border-teal-500/20 hidden sm:inline-flex">LIVE</Badge>
+                    </h1>
+                </div>
             </div>
 
             <div className="flex items-center gap-4">
-                <div className="hidden lg:flex flex-col items-end">
-                    <span className="text-[10px] font-black text-teal-500 uppercase">Latency</span>
+                <div className="hidden sm:flex flex-col items-end">
+                    <span className="text-[10px] font-black text-teal-500 uppercase">Status</span>
                     <span className="text-sm font-bold text-white flex items-center gap-2">
-                        12ms <Activity className="w-3 h-3 text-green-500" />
+                        Operational <Activity className="w-3 h-3 text-green-500 animate-pulse" />
                     </span>
                 </div>
-                <div className="w-[1px] h-10 bg-white/10 hidden lg:block" />
-                <Button className="bg-white text-black hover:bg-teal-500 hover:text-white font-black uppercase tracking-widest px-6 h-12 rounded-xl border-none">
-                    Export Audit
+                <Button variant="outline" className="border-white/10 text-white hover:bg-white/5 rounded-xl h-10 px-4 text-xs font-bold">
+                    Export
                 </Button>
             </div>
         </header>
 
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar">
+
         {activeTab === "overview" && (
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="flex items-center justify-between">
+                    <h2 className="text-xl font-black uppercase tracking-tighter">Command Stats</h2>
+                    <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="border-teal-500/20 text-teal-500 bg-teal-500/5 hover:bg-teal-500/10 text-[9px] font-black uppercase px-4 h-8 rounded-lg"
+                        onClick={async () => {
+                            const res = await fetch("/api/admin/leaderboard/sync", { method: "POST" });
+                            if (res.ok) alert("Leaderboard scores recalculated successfully.");
+                        }}
+                    >
+                        Sync Leaderboard Ranks
+                    </Button>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                     {[
-                        { label: "Active Traders", value: users.length, delta: "+12%", icon: Users, color: "teal" },
-                        { label: "Global Volume", value: "$1.2M", delta: "+5.4%", icon: Zap, color: "orange" },
-                        { label: "System Uptime", value: "99.98%", delta: "STABLE", icon: Globe, color: "blue" },
-                        { label: "Reports Filed", value: "48", delta: "-2", icon: Bell, color: "red" },
+                        { label: "Active Traders", value: stats.activeTraders, delta: "+12%", icon: Users, color: "teal" },
+                        { label: "Global Volume", value: `$${stats.globalVolume.toLocaleString()}`, delta: "+5.4%", icon: Zap, color: "orange" },
+                        { label: "System Uptime", value: stats.uptime, delta: "STABLE", icon: Globe, color: "blue" },
+                        { label: "Reports Filed", value: stats.reports, delta: "-2", icon: Bell, color: "red" },
                     ].map((stat) => (
                         <Card key={stat.label} className="bg-zinc-950 border-white/5 hover:border-white/10 transition-all rounded-3xl p-6 shadow-2xl relative overflow-hidden group">
                             <div className={`absolute top-0 right-0 w-24 h-24 bg-${stat.color}-500/5 blur-3xl -mr-12 -mt-12 transition-all group-hover:bg-${stat.color}-500/10`} />
@@ -276,7 +357,14 @@ export default function AdminDashboard() {
                                     u.username?.toLowerCase().includes(searchQuery.toLowerCase()) || 
                                     u.deriv_account_id?.toLowerCase().includes(searchQuery.toLowerCase())
                                 ).map((u) => (
-                                    <tr key={u.id} className="border-b border-white/5 hover:bg-white/[0.02] group transition-all">
+                                    <tr 
+                                        key={u.id} 
+                                        className="border-b border-white/5 hover:bg-white/[0.04] group transition-all cursor-pointer"
+                                        onClick={() => {
+                                            setSelectedUser(u)
+                                            setIsDetailOpen(true)
+                                        }}
+                                    >
                                         <td className="py-4 px-4">
                                             <div className="flex items-center gap-3">
                                                 <div className="w-10 h-10 rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-500 overflow-hidden font-black text-xs uppercase">
@@ -313,17 +401,20 @@ export default function AdminDashboard() {
                                                         "w-10 h-10 rounded-xl transition-all",
                                                         u.status === 'blocked' ? "text-green-500 hover:bg-green-500/10" : "text-red-500 hover:bg-red-500/10"
                                                     )}
-                                                    onClick={() => handleToggleUserStatus(u.deriv_account_id, u.status)}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation()
+                                                        handleToggleUserStatus(u.deriv_account_id, u.status)
+                                                    }}
                                                 >
                                                     {u.status === 'blocked' ? <UserCheck className="w-4 h-4" /> : <UserX className="w-4 h-4" />}
                                                 </Button>
                                                 <DropdownMenu>
                                                     <DropdownMenuTrigger asChild>
-                                                        <Button variant="ghost" size="icon" className="w-10 h-10 rounded-xl text-gray-500"><MoreVertical className="w-4 h-4" /></Button>
+                                                        <Button variant="ghost" size="icon" className="w-10 h-10 rounded-xl text-gray-500" onClick={(e) => e.stopPropagation()}><MoreVertical className="w-4 h-4" /></Button>
                                                     </DropdownMenuTrigger>
                                                     <DropdownMenuContent align="end" className="bg-zinc-950 border-white/10 text-white p-2">
-                                                        <DropdownMenuItem className="hover:bg-white/5 rounded-lg text-xs font-bold" onClick={() => broadcastNotification(u.deriv_account_id, "Official Message", "Your trading profile has been reviewed by the admin team.")}>Send DM</DropdownMenuItem>
-                                                        <DropdownMenuItem className="hover:bg-white/5 rounded-lg text-xs font-bold">View History</DropdownMenuItem>
+                                                        <DropdownMenuItem className="hover:bg-white/5 rounded-lg text-xs font-bold" onClick={(e) => { e.stopPropagation(); broadcastNotification(u.deriv_account_id, "Official Message", "Your trading profile has been reviewed by the admin team.")}}>Send DM</DropdownMenuItem>
+                                                        <DropdownMenuItem className="hover:bg-white/5 rounded-lg text-xs font-bold" onClick={(e) => { e.stopPropagation(); setSelectedUser(u); setIsDetailOpen(true) }}>View Dossier</DropdownMenuItem>
                                                         <DropdownMenuItem className="hover:bg-red-500/10 rounded-lg text-xs font-bold text-red-500">Hard Reset Token</DropdownMenuItem>
                                                     </DropdownMenuContent>
                                                 </DropdownMenu>
@@ -338,20 +429,136 @@ export default function AdminDashboard() {
             </div>
         )}
 
-        {/* Other tabs placeholders — logic implemented but UI hidden for space */}
-        {(activeTab === "news" || activeTab === "broadcast") && (
-            <div className="flex flex-col items-center justify-center py-20 px-8 text-center bg-zinc-950 border border-white/5 rounded-3xl shadow-2xl animate-pulse">
-                <ShieldAlert className="w-16 h-16 text-teal-800 mb-6" />
-                <h3 className="text-xl font-black uppercase tracking-tighter mb-2">Interface Locked</h3>
-                <p className="text-gray-500 text-sm max-w-md italic">This administrative module is currently processing deep-stream data. Advanced news CRUD and global broadcasting will initialize in few moments.</p>
-                <div className="mt-8 flex gap-4">
-                    <div className="w-3 h-3 bg-teal-500 rounded-full animate-bounce" />
-                    <div className="w-3 h-3 bg-teal-500/50 rounded-full animate-bounce delay-100" />
-                    <div className="w-3 h-3 bg-teal-500/20 rounded-full animate-bounce delay-200" />
-                </div>
+        {activeTab === "broadcast" && (
+            <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
+                <Tabs defaultValue="support" className="w-full">
+                    <TabsList className="bg-zinc-950 border border-white/5 rounded-2xl p-1 mb-6">
+                        <TabsTrigger value="support" className="rounded-xl px-8 font-black uppercase tracking-widest text-[10px] data-[state=active]:bg-teal-600">Active Support</TabsTrigger>
+                        <TabsTrigger value="global" className="rounded-xl px-8 font-black uppercase tracking-widest text-[10px] data-[state=active]:bg-teal-600">Global Broadcast</TabsTrigger>
+                    </TabsList>
+                    
+                    <TabsContent value="support">
+                        <SupportChat />
+                    </TabsContent>
+                    
+                    <TabsContent value="global">
+                        <Card className="bg-zinc-950 border-white/5 rounded-3xl p-8 shadow-2xl">
+                            <div className="max-w-2xl mx-auto space-y-8">
+                                <div className="text-center">
+                                    <h3 className="text-2xl font-black uppercase tracking-tighter mb-2">Platform Broadcast</h3>
+                                    <p className="text-gray-500 text-sm italic">This will send a notification to EVERY registered user in the system.</p>
+                                </div>
+                                <div className="space-y-4 pt-4 border-t border-white/5">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Broadcast Title</label>
+                                        <Input id="broadcast-title" placeholder="System Maintenance..." className="bg-white/5 border-white/5 rounded-xl h-12 text-sm font-bold" />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Core Message</label>
+                                        <textarea id="broadcast-message" className="w-full bg-white/5 border border-white/5 rounded-xl p-4 text-sm font-bold min-h-[120px] focus:outline-none focus:border-teal-500/30" placeholder="Type your global announcement here..." />
+                                    </div>
+                                    <Button 
+                                        className="w-full bg-red-600 hover:bg-red-500 text-white font-black uppercase tracking-widest h-14 rounded-2xl border-none"
+                                        onClick={async () => {
+                                            const title = (document.getElementById("broadcast-title") as HTMLInputElement).value;
+                                            const message = (document.getElementById("broadcast-message") as HTMLTextAreaElement).value;
+                                            const res = await fetch("/api/notifications", {
+                                                method: "POST",
+                                                headers: { "Content-Type": "application/json" },
+                                                body: JSON.stringify({ userId: "all", title, message, type: "broadcast" })
+                                            });
+                                            if (res.ok) alert("Global broadcast initiated successfully.");
+                                        }}
+                                    >
+                                        Initialize Global Transmission <BarChart3 className="w-4 h-4 ml-2" />
+                                    </Button>
+                                </div>
+                            </div>
+                        </Card>
+                    </TabsContent>
+                </Tabs>
             </div>
         )}
+
+        {activeTab === "news" && (
+            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <Card className="bg-zinc-950 border-white/5 rounded-3xl p-8 shadow-2xl">
+                    <div className="flex items-center justify-between mb-8">
+                        <div>
+                            <CardTitle className="text-xl font-black uppercase tracking-tighter">News Management</CardTitle>
+                            <CardDescription className="text-gray-500">Curate and publish updates to the global trading feed</CardDescription>
+                        </div>
+                        <Dialog>
+                            <DialogTrigger asChild>
+                                <Button className="bg-teal-600 hover:bg-teal-500 text-white font-black uppercase tracking-widest px-6 rounded-xl border-none">Create Article</Button>
+                            </DialogTrigger>
+                            <DialogContent className="bg-zinc-950 border-white/10 text-white">
+                                <DialogHeader>
+                                    <DialogTitle className="font-black uppercase tracking-widest">New Transmission</DialogTitle>
+                                    <DialogDescription>Input the article data for global distribution.</DialogDescription>
+                                </DialogHeader>
+                                <div className="space-y-4 py-4">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black uppercase text-gray-500">Headline</label>
+                                        <Input id="news-title" className="bg-white/5 border-white/5" placeholder="Bitcoin hits new ATH..." />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black uppercase text-gray-500">Content</label>
+                                        <textarea id="news-content" className="w-full bg-white/5 border border-white/5 rounded-lg p-3 text-sm min-h-[100px]" placeholder="Detailed analysis..." />
+                                    </div>
+                                    <Button 
+                                        className="w-full bg-teal-600 font-black uppercase tracking-widest"
+                                        onClick={async () => {
+                                            const title = (document.getElementById("news-title") as HTMLInputElement).value;
+                                            const content = (document.getElementById("news-content") as HTMLTextAreaElement).value;
+                                            const res = await fetch("/api/admin/news", {
+                                                method: "POST",
+                                                body: JSON.stringify({ title, content, category: "Market" })
+                                            });
+                                            if (res.ok) {
+                                                alert("Article published successfully");
+                                                window.location.reload();
+                                            }
+                                        }}
+                                    >
+                                        Publish Now
+                                    </Button>
+                                </div>
+                            </DialogContent>
+                        </Dialog>
+                    </div>
+                    {/* Simplified News List */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {news.length === 0 ? (
+                            <div className="col-span-full py-20 text-center opacity-20">
+                                <Newspaper className="w-12 h-12 mx-auto mb-4" />
+                                <p className="text-xs font-black uppercase">No articles found</p>
+                            </div>
+                        ) : news.map((item) => (
+                            <div key={item.id} className="p-4 rounded-2xl bg-white/5 border border-white/5 hover:border-teal-500/20 transition-all group">
+                                <div className="h-32 mb-4 rounded-xl overflow-hidden bg-zinc-900">
+                                    <img src={item.image_url} alt="" className="w-full h-full object-cover grayscale-[0.8] group-hover:grayscale-0 transition-all" />
+                                </div>
+                                <h4 className="font-bold text-white mb-2 line-clamp-2">{item.title}</h4>
+                                <div className="flex items-center justify-between">
+                                    <Badge variant="outline" className="text-[9px] uppercase font-black border-white/10">{item.category}</Badge>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-500"><MoreVertical className="w-4 h-4"/></Button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </Card>
+            </div>
+        )}
+        </div>
       </main>
+
+      <UserDetailDrawer 
+        user={selectedUser} 
+        isOpen={isDetailOpen} 
+        onClose={() => setIsDetailOpen(false)} 
+        onStatusToggle={handleToggleUserStatus}
+      />
     </div>
   )
 }
