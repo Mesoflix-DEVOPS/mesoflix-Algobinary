@@ -181,18 +181,21 @@ export default function AdminLoginPage() {
                 <div className="space-y-6">
                     {mode === "REGISTER" && (
                         <div className="flex flex-col items-center text-center space-y-4">
-                            <div className="p-4 bg-white rounded-2xl shadow-inner mb-2 border-4 border-teal-500/20">
-                                {/* Use Google Charts for QR generation based on TOTP standard format */}
+                            <div className="p-4 bg-white rounded-2xl shadow-inner mb-2 border-4 border-teal-500/20 relative group">
                                 <img 
-                                    src={`https://chart.googleapis.com/chart?chs=200x200&chld=M|0&cht=qr&chl=${encodeURIComponent(`otpauth://totp/Derivex:${email}?secret=${regData.twoFactorSecret}&issuer=Mesoflix`)}`} 
+                                    src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(`otpauth://totp/Derivex:${email}?secret=${regData.twoFactorSecret}&issuer=Mesoflix`)}`} 
                                     alt="QR Code"
                                     className="w-40 h-40"
+                                    onError={(e) => {
+                                        const target = e.target as HTMLImageElement;
+                                        target.src = "https://placehold.co/200x200/000000/0d9488?text=Scan+Setup+Key";
+                                    }}
                                 />
                             </div>
                             <div>
-                                <h3 className="text-sm font-black text-white uppercase italic">Scan with Authenticator</h3>
+                                <h3 className="text-sm font-black text-white uppercase italic">Scan or Enter Key</h3>
                                 <p className="text-[11px] text-gray-500 max-w-[200px] mt-2 leading-relaxed">
-                                    Use Google Authenticator or Authy to scan this code. Alternatively, enter the key manually:
+                                    Finalize setup by scanning the code or manually entering this secret key:
                                 </p>
                                 <div className="mt-3 flex items-center justify-center gap-2 bg-white/5 p-2 rounded-lg border border-white/5">
                                     <span className="text-[10px] font-mono font-bold text-teal-400 tracking-wider">
