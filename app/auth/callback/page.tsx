@@ -273,9 +273,9 @@ function AuthCallbackContent() {
           deriv_account_id: primaryAccountId,
           deriv_token: primaryToken,
           balance: userProfile.balance || 0,
+          // Flag that this profile is automatically complete for legacy institutional users
+          profile_complete: true, // Legacy accounts bypass onboarding
           auth_flow: authFlow,
-          // Flag that this profile needs to be completed by the user
-          profile_complete: authFlow === "legacy" // V2 users need to fill in their details
         }
 
         if (refreshToken) upsertPayload.deriv_refresh_token = refreshToken

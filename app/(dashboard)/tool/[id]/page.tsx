@@ -48,15 +48,9 @@ export default function SessionTraderPage() {
     <div className="flex flex-col gap-6 min-h-full pb-10">
       {/* Header Info */}
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-black text-white uppercase tracking-tighter flex items-center gap-3">
+        <h1 className="text-3xl font-black text-white uppercase tracking-tighter">
             {toolName}
-            <div className="px-2 py-0.5 rounded bg-teal-500/10 border border-teal-500/20 text-[10px] text-teal-400 font-black tracking-widest">
-                v2.1.0-MOBILE-READY
-            </div>
         </h1>
-        <p className="text-xs text-muted-foreground uppercase tracking-widest font-medium">
-            Statistical Decision Engine • Adaptive Barrier Calibration
-        </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">

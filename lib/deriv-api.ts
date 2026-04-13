@@ -16,6 +16,7 @@ class DerivAPI {
   private subscriptionRegistry: Map<number, Subscription> = new Map()
   private isConnected = false
   private pingInterval: any = null
+  private pongTimeout: any = null
   private connectionPromise: Promise<void> | null = null
   public currentAuthFlow: "legacy" | "new_v2" = "new_v2"
   private intentionalDisconnect = false
@@ -28,6 +29,7 @@ class DerivAPI {
     this.intentionalDisconnect = false
 
     if (this.pingInterval) clearInterval(this.pingInterval)
+    if (this.pongTimeout) clearTimeout(this.pongTimeout)
     
     if (typeof window !== "undefined") {
         this.currentAuthFlow = (localStorage.getItem("derivex_auth_flow") as any) || "new_v2"
@@ -47,28 +49,33 @@ class DerivAPI {
           console.log("[DerivAPI] Connection established")
           this.isConnected = true
           this.startHeartbeat()
-          
-          // RESUBSCRIBE ALL ACTIVE FLOWS
           this.resubscribeAll()
-          
           resolve()
         }
 
         this.ws.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data)
+            
+            // Clear pong timeout on any message activity (indicates connection is alive)
+            if (this.pongTimeout) {
+                clearTimeout(this.pongTimeout)
+                this.pongTimeout = null
+            }
+
             if (data.msg_type === "ping") return
             
+            if (data.error) {
+                console.error("[DerivAPI] Server Error:", data.error)
+            }
+
             const reqId = data.req_id
             
-            // 1. Check persistent subscriptions first
             if (reqId && this.subscriptionHandlers.has(reqId)) {
-                const handler = this.subscriptionHandlers.get(reqId)
-                handler?.(data)
+                this.subscriptionHandlers.get(reqId)?.(data)
                 return 
             }
 
-            // 2. Check one-off responses
             if (reqId && this.responseHandlers.has(reqId)) {
                 const handler = this.responseHandlers.get(reqId)
                 handler?.resolve(data)
@@ -95,8 +102,10 @@ class DerivAPI {
               handler.reject(new Error("Connection closed during request"))
           })
           this.responseHandlers.clear()
-          // DONT clear subscriptionHandlers or subscriptionRegistry - we use them for recovery
           
+          if (this.pingInterval) clearInterval(this.pingInterval)
+          if (this.pongTimeout) clearTimeout(this.pongTimeout)
+
           setTimeout(() => {
             if (!this.intentionalDisconnect) {
                 console.log("[DerivAPI] Attempting auto-reconnect...")
@@ -118,14 +127,21 @@ class DerivAPI {
     if (this.subscriptionRegistry.size === 0) return
     console.log(`[DerivAPI] Restoring ${this.subscriptionRegistry.size} active subscriptions...`)
     
-    this.subscriptionRegistry.forEach((sub) => {
-        // Re-register handler
-        this.subscriptionHandlers.set(sub.id, sub.callback)
-        // Send request
-        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-            this.ws.send(JSON.stringify({ ...sub.request, req_id: sub.id }))
+    // Aggressive re-auth if legacy to ensure subscription success
+    const reAuth = async () => {
+        if (this.currentAuthFlow === "legacy") {
+            const token = typeof window !== "undefined" ? localStorage.getItem("derivex_token") : null
+            if (token) await this.authorize(token)
         }
-    })
+
+        this.subscriptionRegistry.forEach((sub) => {
+            this.subscriptionHandlers.set(sub.id, sub.callback)
+            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                this.ws.send(JSON.stringify({ ...sub.request, req_id: sub.id }))
+            }
+        })
+    }
+    reAuth()
   }
 
   private async waitForConnection(): Promise<void> {
@@ -137,15 +153,23 @@ class DerivAPI {
   private startHeartbeat() {
     this.pingInterval = setInterval(() => {
         if (this.isConnected && this.ws?.readyState === WebSocket.OPEN) {
+            // Send ping
             this.ws.send(JSON.stringify({ ping: 1 }))
+            
+            // Start Pong Timeout: If no response in 5s, the connection is stale
+            this.pongTimeout = setTimeout(() => {
+                console.warn("[DerivAPI] Heartbeat stale: No pong received within 5s. Forcing disconnect.")
+                if (this.ws) this.ws.close() // Trigger onclose/auto-reconnect
+            }, 5000)
         }
-    }, 15000) // 15s for more active monitoring
+    }, 15000)
   }
 
   disconnect() {
       console.log("[DerivAPI] Intentionally disconnecting active WebSocket socket layer...")
       this.intentionalDisconnect = true
       if (this.pingInterval) clearInterval(this.pingInterval)
+      if (this.pongTimeout) clearTimeout(this.pongTimeout)
       if (this.ws) {
           this.ws.onclose = null 
           this.ws.close()
@@ -304,15 +328,11 @@ class DerivAPI {
         currency: params.currency,
         duration: params.duration,
         duration_unit: params.duration_unit,
+        symbol: params.symbol // Unified V2 uses 'symbol' in parameters for Digit contracts
     }
     
-    if (this.currentAuthFlow === "new_v2") {
-        parameters.underlying_symbol = params.symbol
-    } else {
-        parameters.symbol = params.symbol
-    }
-
-    if (params.barrier) parameters.barrier = params.barrier
+    // Barrier must be a string for V2 compliance if provided
+    if (params.barrier) parameters.barrier = String(params.barrier)
 
     const payload: any = {
       buy: 1,
@@ -381,8 +401,14 @@ class DerivAPI {
   }
 
   async unsubscribe(reqId: number): Promise<void> {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return
-    this.ws.send(JSON.stringify({ forget: reqId }))
+    const ws = this.ws
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+        // Even if socket is dead, we must clean our registry
+        this.subscriptionHandlers.delete(reqId)
+        this.subscriptionRegistry.delete(reqId)
+        return
+    }
+    ws.send(JSON.stringify({ forget: reqId }))
     this.subscriptionHandlers.delete(reqId)
     this.subscriptionRegistry.delete(reqId)
   }

@@ -150,12 +150,22 @@ export function BotDisplay({
                     <span className="text-[9px] font-black text-muted-foreground uppercase tracking-tighter">Trades</span>
                     <span className="text-xl font-black text-white">{stats.trades}</span>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
+                    <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        onClick={onReset}
+                        className="h-8 w-8 rounded-lg hover:bg-red-500/10 hover:text-red-500 text-white/20 transition-all"
+                        title="Reset Session"
+                    >
+                        <RefreshCw className="w-3.5 h-3.5" />
+                    </Button>
                     <Button 
                         variant="ghost" 
                         size="icon" 
                         onClick={() => setIsHistoryOpen(true)}
                         className="h-8 w-8 rounded-lg hover:bg-teal-500/10 hover:text-teal-400 text-white/20 transition-all"
+                        title="View History"
                     >
                         <Eye className="w-4 h-4" />
                     </Button>
@@ -216,8 +226,7 @@ export function BotDisplay({
                     <Radar className="w-48 h-48 text-teal-400/20 animate-spin-slow" />
                 </div>
             )}
-            <div className="relative z-10 text-center space-y-2">
-                <div className="h-4" /> {/* Spacer instead of label */}
+            <div className="relative z-10 text-center">
                 <h2 className={cn(
                     "text-7xl sm:text-9xl font-black font-mono tracking-tighter transition-all duration-1000",
                     (state === 'IN_TRADE' ? currentTrade?.profit >= 0 : stats.profit >= 0) 
@@ -232,18 +241,7 @@ export function BotDisplay({
                 </Badge>
             </div>
 
-            {/* Bottom Right Reset Control */}
-            <div className="absolute bottom-4 right-4 z-20">
-                <Button 
-                    variant="ghost" 
-                    size="sm"
-                    onClick={onReset}
-                    className="h-9 px-3 bg-red-500/5 hover:bg-red-500/20 border border-red-500/10 text-red-500/40 hover:text-red-500 rounded-xl transition-all group/reset"
-                >
-                    <RefreshCw className="w-3.5 h-3.5 mr-2 group-hover/reset:rotate-180 transition-transform duration-500" />
-                    <span className="text-[10px] font-black uppercase tracking-widest">Reset Session</span>
-                </Button>
-            </div>
+
         </div>
 
         {/* Status Hub */}

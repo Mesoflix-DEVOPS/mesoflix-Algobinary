@@ -198,13 +198,14 @@ export function TopNavbar() {
                  <Badge className="bg-teal-500/20 text-teal-500 border-teal-500/30 text-[9px] font-black h-5 px-1.5 uppercase shrink-0">Real</Badge>
                )}
                <div className="flex flex-col items-start leading-none gap-0.5 overflow-hidden">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[11px] font-bold text-white font-mono truncate">{activeAcct}</span>
+                  <div className="flex items-center gap-1.5 md:gap-2">
+                    <span className="text-[11px] font-bold text-white font-mono truncate hidden md:block">{activeAcct}</span>
                     <span className="text-[10px] font-black text-teal-400">
                         {balances[activeAcct || ""] ? `$${balances[activeAcct || ""]}` : isSyncing ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : "---"}
                     </span>
                   </div>
-                  <span className="text-[8px] text-gray-500 uppercase font-black tracking-widest">{user?.currency || "USD"} Wallet</span>
+                  <span className="text-[8px] text-gray-500 uppercase font-black tracking-widest hidden md:block">{user?.currency || "USD"} Wallet</span>
+                  <span className="text-[8px] text-gray-500 uppercase font-black tracking-widest block md:hidden">Current Balance</span>
                </div>
                <ChevronDown className="w-3 h-3 text-gray-500 group-hover:text-white ml-auto" />
             </Button>
