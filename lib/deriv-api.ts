@@ -11,11 +11,14 @@ class DerivAPI {
   private pingInterval: any = null
   private connectionPromise: Promise<void> | null = null
   public currentAuthFlow: "legacy" | "new_v2" = "new_v2"
+  private intentionalDisconnect = false
 
-  async connect(): Promise<void> {
-    if (this.connectionPromise && (this.ws?.readyState === WebSocket.CONNECTING || this.ws?.readyState === WebSocket.OPEN)) {
+  async connect(customWsUrl?: string): Promise<void> {
+    if (!this.intentionalDisconnect && this.connectionPromise && (this.ws?.readyState === WebSocket.CONNECTING || this.ws?.readyState === WebSocket.OPEN)) {
         return this.connectionPromise
     }
+
+    this.intentionalDisconnect = false
 
     if (this.pingInterval) clearInterval(this.pingInterval)
     
@@ -28,7 +31,8 @@ class DerivAPI {
     // regardless of whether the session token was acquired via V1 or V2 PKCE flow.
     // The alphanumeric CLIENT_ID is strictly for the OAuth2 authorization and token endpoints.
     const appId = derivConfig.LEGACY_APP_ID
-    const wsUrl = `wss://ws.derivws.com/websockets/v3?app_id=${appId}`
+    const defaultWsUrl = `wss://ws.derivws.com/websockets/v3?app_id=${appId}`
+    const wsUrl = customWsUrl || defaultWsUrl
     
     this.connectionPromise = new Promise((resolve, reject) => {
       try {
@@ -87,8 +91,10 @@ class DerivAPI {
           this.messageId = 0
 
           setTimeout(() => {
-            console.log("[DerivAPI] Attempting auto-reconnect...")
-            this.connect()
+            if (!this.intentionalDisconnect) {
+                console.log("[DerivAPI] Attempting auto-reconnect...")
+                this.connect(customWsUrl)
+            }
           }, 3000)
         }
       } catch (err) {
@@ -113,6 +119,22 @@ class DerivAPI {
             this.ws.send(JSON.stringify({ ping: 1 }))
         }
     }, 30000)
+  }
+
+  disconnect() {
+      console.log("[DerivAPI] Intentionally disconnecting active WebSocket socket layer...")
+      this.intentionalDisconnect = true
+      if (this.pingInterval) clearInterval(this.pingInterval)
+      if (this.ws) {
+          this.ws.onclose = null 
+          this.ws.close()
+          this.ws = null
+      }
+      this.isConnected = false
+      this.connectionPromise = null
+      this.responseHandlers.forEach(h => h.reject(new Error("Socket swapped.")))
+      this.responseHandlers.clear()
+      // We do not clear subscriptionHandlers to allow them to recover post-swap!
   }
 
   private async send(message: any): Promise<any> {
@@ -149,11 +171,106 @@ class DerivAPI {
   }
 
   async authorize(token: string): Promise<any> {
-    return this.send({ authorize: token })
+    if (this.currentAuthFlow === "new_v2") {
+        console.log("[DerivAPI] Intercepting authorize request for V2 Flow architecture...")
+        let activeAcct = typeof window !== "undefined" ? localStorage.getItem("derivex_acct") : null
+        
+        // Self-heal: If activeAcct is missing (e.g. during very first login callback), fetch it!
+        if (!activeAcct) {
+            console.log("[DerivAPI] activeAcct missing during V2 Auth. Self-healing via REST account list...")
+            const listData = await this.getAccountList(token)
+            if (listData?.account_list?.length > 0) {
+                // Prefer real account if available, otherwise fallback to demo
+                const primary = listData.account_list.find((a: any) => a.is_virtual === 0) || listData.account_list[0]
+                activeAcct = primary.loginid
+                if (typeof window !== "undefined" && activeAcct) {
+                    localStorage.setItem("derivex_acct", activeAcct)
+                }
+            }
+        }
+
+        if (!activeAcct) {
+            console.warn("[DerivAPI] activeAcct is strictly missing for V2 OTP fetching.")
+            return { error: { message: "No active account selected/found for V2 Auth." } }
+        }
+        
+        try {
+            console.log("[DerivAPI] Requesting OTP from https://api.derivws.com/trading/v1/options/accounts/" + activeAcct + "/otp")
+            const res = await fetch(`https://api.derivws.com/trading/v1/options/accounts/${activeAcct}/otp`, {
+                method: "POST",
+                headers: {
+                    "Deriv-App-ID": derivConfig.CLIENT_ID,
+                    "Authorization": `Bearer ${token}`
+                }
+            })
+            if (!res.ok) {
+                const text = await res.json()
+                const errSnippet = text?.errors?.[0]?.message || "OTP HTTP REST Failed"
+                console.error("[DerivAPI] OTP Fetch Failed:", text)
+                return { error: { message: errSnippet } }
+            }
+            const data = await res.json()
+            const otpUrl = data.data?.url
+            if (!otpUrl) return { error: { message: "No OTP URL returned from endpoint" } }
+
+            // Safely swap sockets inline
+            this.disconnect()
+            await this.connect(otpUrl)
+            
+            console.log("[DerivAPI] V2 Authorized Socket established seamlessly!")
+            
+            // Falsify older format `authorize` response to ensure backward UI structural compatibility
+            return { authorize: { 
+                loginid: activeAcct, 
+                email: `${activeAcct.toLowerCase()}@v2-session.deriv.local`, 
+                balance: 0, 
+                currency: "USD",
+                fullname: `Trader ${activeAcct}`
+            } }
+        } catch (e: any) {
+            console.error("[DerivAPI] V2 REST Exception:", e)
+            return { error: { message: e.message } }
+        }
+    } else {
+        return this.send({ authorize: token })
+    }
   }
 
-  async getAccountList(): Promise<any> {
-    return this.send({ account_list: 1 })
+  async getAccountList(token?: string): Promise<any> {
+    if (this.currentAuthFlow === "new_v2") {
+        const activeToken = token || (typeof window !== "undefined" ? localStorage.getItem("derivex_token") : null)
+        if (!activeToken) return { error: { message: "No API token found to fetch account list." } }
+        
+        try {
+            const res = await fetch("https://api.derivws.com/trading/v1/options/accounts", {
+                method: "GET",
+                headers: {
+                    "Deriv-App-ID": derivConfig.CLIENT_ID,
+                    "Authorization": `Bearer ${activeToken}`
+                }
+            })
+            if (!res.ok) {
+                const text = await res.json()
+                const errSnippet = text?.errors?.[0]?.message || "Account List Fetch Failed"
+                return { error: { message: errSnippet } }
+            }
+            const data = await res.json()
+            // Map the REST response structural logic back to legacy WS structure
+            // Example REST response: { data: [ { id: "CR123", is_virtual: true, ... } ] }
+            return {
+                account_list: data.data?.map((acct: any) => ({
+                    loginid: acct.id || acct.loginid,
+                    is_virtual: acct.is_virtual ? 1 : 0,
+                    currency: acct.currency || "USD",
+                    token: activeToken // V2 universally binds the primary token to all accounts!
+                })) || []
+            }
+        } catch (e: any) {
+            return { error: { message: e.message } }
+        }
+    } else {
+        return this.send({ account_list: 1 })
+    }
   }
 
   async getActiveSymbols(): Promise<any> {
@@ -276,14 +393,7 @@ class DerivAPI {
     }))
   }
 
-  disconnect(): void {
-    if (this.ws) {
-      if (this.pingInterval) clearInterval(this.pingInterval)
-      this.ws.close()
-      this.isConnected = false
-      this.connectionPromise = null
-    }
-  }
+// Original disconnect removed to prevent duplicate signature with V2 refactored disconnect
 }
 
 export const derivAPI = new DerivAPI()

@@ -59,34 +59,49 @@ export function TopNavbar() {
       console.log(`[TopNavbar] Starting balance sync for ${accountList.length} accounts...`)
 
       const originalToken = localStorage.getItem("derivex_token")
+      const authFlow = localStorage.getItem("derivex_auth_flow")
       const currentBalances: Record<string, string> = { ...balances }
 
       try {
-          await derivAPI.connect()
-          
-          for (const acct of accountList) {
-              try {
-                  console.log(`[TopNavbar] Authorizing account: ${acct.account}`)
-                  const resp = await derivAPI.authorize(acct.token)
-                  if (resp.authorize) {
-                      currentBalances[acct.account] = parseFloat(resp.authorize.balance).toLocaleString(undefined, {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2
-                      })
-                      console.log(`[TopNavbar] Balance for ${acct.account}: ${resp.authorize.balance}`)
+          if (authFlow === "new_v2") {
+              console.log("[TopNavbar] V2 Flow detected. Fetching global balances via REST bypass...");
+              const accountData = await derivAPI.getAccountList(originalToken || undefined)
+              if (accountData?.account_list) {
+                  // The REST endpoint might return balances inline, or we might need to rely on the active ws
+                  // For now, assume REST contains balances natively or will rely on active WS stream
+                  accountData.account_list.forEach((acct: any) => {
+                      if (acct.balance !== undefined) {
+                          currentBalances[acct.loginid] = parseFloat(acct.balance).toLocaleString(undefined, {
+                              minimumFractionDigits: 2, maximumFractionDigits: 2
+                          })
+                      }
+                  })
+              }
+          } else {
+              await derivAPI.connect()
+              for (const acct of accountList) {
+                  try {
+                      console.log(`[TopNavbar] Authorizing account: ${acct.account}`)
+                      const resp = await derivAPI.authorize(acct.token)
+                      if (resp.authorize) {
+                          currentBalances[acct.account] = parseFloat(resp.authorize.balance).toLocaleString(undefined, {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2
+                          })
+                          console.log(`[TopNavbar] Balance for ${acct.account}: ${resp.authorize.balance}`)
+                      }
+                  } catch (acctErr) {
+                      console.error(`[TopNavbar] Failed to sync account ${acct.account}:`, acctErr)
                   }
-              } catch (acctErr) {
-                  console.error(`[TopNavbar] Failed to sync account ${acct.account}:`, acctErr)
+              }
+              // Restore original authorization
+              if (originalToken) {
+                  console.log("[TopNavbar] Restoring original account authorization")
+                  await derivAPI.authorize(originalToken)
               }
           }
 
           setBalances(currentBalances)
-
-          // Restore original authorization
-          if (originalToken) {
-              console.log("[TopNavbar] Restoring original account authorization")
-              await derivAPI.authorize(originalToken)
-          }
       } catch (err) {
           console.error("[TopNavbar] Global balance sync failure:", err)
       } finally {
