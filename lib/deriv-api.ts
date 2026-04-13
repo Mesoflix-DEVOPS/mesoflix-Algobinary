@@ -16,7 +16,6 @@ class DerivAPI {
   private subscriptionRegistry: Map<number, Subscription> = new Map()
   private isConnected = false
   private pingInterval: any = null
-  private pongTimeout: any = null
   private connectionPromise: Promise<void> | null = null
   public currentAuthFlow: "legacy" | "new_v2" = "new_v2"
   private intentionalDisconnect = false
@@ -29,7 +28,6 @@ class DerivAPI {
     this.intentionalDisconnect = false
 
     if (this.pingInterval) clearInterval(this.pingInterval)
-    if (this.pongTimeout) clearTimeout(this.pongTimeout)
     
     if (typeof window !== "undefined") {
         this.currentAuthFlow = (localStorage.getItem("derivex_auth_flow") as any) || "new_v2"
@@ -45,10 +43,27 @@ class DerivAPI {
         console.log(`[DerivAPI] Connecting to dynamically resolved endpoint (Flow: ${this.currentAuthFlow}):`, wsUrl)
         this.ws = new WebSocket(wsUrl)
 
-        this.ws.onopen = () => {
+        this.ws.onopen = async () => {
           console.log("[DerivAPI] Connection established")
           this.isConnected = true
           this.startHeartbeat()
+          
+          const token = typeof window !== "undefined" ? localStorage.getItem("derivex_token") : null
+          const isPublicUrl = this.ws?.url.includes("/public")
+          
+          // Re-Authorization must happen BEFORE resubscribing
+          if (token) {
+              if (this.currentAuthFlow === "new_v2" && isPublicUrl) {
+                  console.log("[DerivAPI] V2 Reconnect: Initiating OTP swap...")
+                  await this.authorize(token)
+                  resolve()
+                  return
+              } else if (this.currentAuthFlow === "legacy") {
+                  console.log("[DerivAPI] Legacy Reconnect: Re-authorizing...")
+                  await this.authorize(token)
+              }
+          }
+
           this.resubscribeAll()
           resolve()
         }
@@ -57,12 +72,6 @@ class DerivAPI {
           try {
             const data = JSON.parse(event.data)
             
-            // Clear pong timeout on any message activity (indicates connection is alive)
-            if (this.pongTimeout) {
-                clearTimeout(this.pongTimeout)
-                this.pongTimeout = null
-            }
-
             if (data.msg_type === "ping") return
             
             if (data.error) {
@@ -96,6 +105,7 @@ class DerivAPI {
         this.ws.onclose = () => {
           this.isConnected = false
           this.connectionPromise = null
+          this.messageId = 0 // Restore clean ID sequencing
           console.log("[DerivAPI] Connection closed")
           
           this.responseHandlers.forEach((handler) => {
@@ -104,7 +114,6 @@ class DerivAPI {
           this.responseHandlers.clear()
           
           if (this.pingInterval) clearInterval(this.pingInterval)
-          if (this.pongTimeout) clearTimeout(this.pongTimeout)
 
           setTimeout(() => {
             if (!this.intentionalDisconnect) {
@@ -127,21 +136,12 @@ class DerivAPI {
     if (this.subscriptionRegistry.size === 0) return
     console.log(`[DerivAPI] Restoring ${this.subscriptionRegistry.size} active subscriptions...`)
     
-    // Aggressive re-auth if legacy to ensure subscription success
-    const reAuth = async () => {
-        if (this.currentAuthFlow === "legacy") {
-            const token = typeof window !== "undefined" ? localStorage.getItem("derivex_token") : null
-            if (token) await this.authorize(token)
+    this.subscriptionRegistry.forEach((sub) => {
+        this.subscriptionHandlers.set(sub.id, sub.callback)
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify({ ...sub.request, req_id: sub.id }))
         }
-
-        this.subscriptionRegistry.forEach((sub) => {
-            this.subscriptionHandlers.set(sub.id, sub.callback)
-            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-                this.ws.send(JSON.stringify({ ...sub.request, req_id: sub.id }))
-            }
-        })
-    }
-    reAuth()
+    })
   }
 
   private async waitForConnection(): Promise<void> {
@@ -153,23 +153,15 @@ class DerivAPI {
   private startHeartbeat() {
     this.pingInterval = setInterval(() => {
         if (this.isConnected && this.ws?.readyState === WebSocket.OPEN) {
-            // Send ping
             this.ws.send(JSON.stringify({ ping: 1 }))
-            
-            // Start Pong Timeout: If no response in 5s, the connection is stale
-            this.pongTimeout = setTimeout(() => {
-                console.warn("[DerivAPI] Heartbeat stale: No pong received within 5s. Forcing disconnect.")
-                if (this.ws) this.ws.close() // Trigger onclose/auto-reconnect
-            }, 5000)
         }
     }, 15000)
   }
 
   disconnect() {
-      console.log("[DerivAPI] Intentionally disconnecting active WebSocket socket layer...")
+      console.log("[DerivAPI] Intention disconnect...")
       this.intentionalDisconnect = true
       if (this.pingInterval) clearInterval(this.pingInterval)
-      if (this.pongTimeout) clearTimeout(this.pongTimeout)
       if (this.ws) {
           this.ws.onclose = null 
           this.ws.close()
@@ -177,8 +169,6 @@ class DerivAPI {
       }
       this.isConnected = false
       this.connectionPromise = null
-      this.responseHandlers.forEach(h => h.reject(new Error("Socket swapped.")))
-      this.responseHandlers.clear()
   }
 
   private async send(message: any): Promise<any> {
@@ -186,28 +176,18 @@ class DerivAPI {
 
     return new Promise((resolve, reject) => {
       if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-        reject(new Error("WebSocket not connected after waiting"))
+        reject(new Error("WebSocket not connected"))
         return
       }
 
       this.messageId++
       const msgId = this.messageId
       const payload = { ...message, req_id: msgId }
-
       this.responseHandlers.set(msgId, { resolve, reject })
 
       try {
-        setTimeout(() => {
-          if (this.responseHandlers.has(msgId)) {
-            this.responseHandlers.delete(msgId)
-            console.error(`[DerivAPI] Request ${msgId} timed out:`, message)
-            reject(new Error("Request timeout"))
-          }
-        }, 30000)
-
         this.ws.send(JSON.stringify(payload))
       } catch (error) {
-        console.error("[DerivAPI] Send error:", error)
         this.responseHandlers.delete(msgId)
         reject(error)
       }
@@ -257,8 +237,7 @@ class DerivAPI {
                 loginid: activeAcct, 
                 email: `${activeAcct.toLowerCase()}@v2-session.deriv.local`, 
                 balance: 0, 
-                currency: "USD",
-                fullname: `Trader ${activeAcct}`
+                currency: "USD"
             } }
         } catch (e: any) {
             return { error: { message: e.message } }
@@ -271,7 +250,7 @@ class DerivAPI {
   async getAccountList(token?: string): Promise<any> {
     if (this.currentAuthFlow === "new_v2") {
         const activeToken = token || (typeof window !== "undefined" ? localStorage.getItem("derivex_token") : null)
-        if (!activeToken) return { error: { message: "No API token found to fetch account list." } }
+        if (!activeToken) return { error: { message: "No API token found." } }
         
         try {
             const res = await fetch("https://api.derivws.com/trading/v1/options/accounts", {
@@ -282,23 +261,16 @@ class DerivAPI {
                 }
             })
             const data = await res.json()
-            if (!res.ok) {
-                return { error: { message: data?.errors?.[0]?.message || "Account List Fetch Failed" } }
-            }
+            if (!res.ok) return { error: { message: data?.errors?.[0]?.message || "Account List Failed" } }
 
             const accounts = data.data || data.accounts || data.account_list || []
             return {
-                account_list: accounts.map((acct: any) => {
-                    const loginid = acct.account_id || acct.accountId || acct.id || acct.loginid || acct.login
-                    return {
-                        loginid,
-                        is_virtual: acct.account_type === "demo" || acct.is_virtual === true || acct.is_virtual === 1 ? 1 : 0,
-                        account_type: acct.account_type,
-                        currency: acct.currency || acct.account_currency || "USD",
-                        balance: acct.balance,
-                        token: activeToken
-                    }
-                })
+                account_list: accounts.map((acct: any) => ({
+                    loginid: acct.account_id || acct.id || acct.loginid,
+                    is_virtual: acct.account_type === "demo" ? 1 : 0,
+                    currency: acct.currency || "USD",
+                    token: activeToken
+                }))
             }
         } catch (e: any) {
             return { error: { message: e.message } }
@@ -328,48 +300,36 @@ class DerivAPI {
         currency: params.currency,
         duration: params.duration,
         duration_unit: params.duration_unit,
-        symbol: params.symbol // Unified V2 uses 'symbol' in parameters for Digit contracts
+        symbol: params.symbol,
+        underlying_symbol: params.symbol // V2 Unified often expects both
     }
     
-    // Barrier must be a string for V2 compliance if provided
     if (params.barrier) parameters.barrier = String(params.barrier)
 
-    const payload: any = {
+    return this.send({
       buy: 1,
       price: params.amount,
       parameters
-    }
-    return this.send(payload)
+    })
   }
 
   async subscribeToTicks(symbol: string, onTick: (data: any) => void): Promise<number | null> {
     await this.waitForConnection()
-    
     const msgId = ++this.messageId
     const request = { ticks: symbol, subscribe: 1 }
     
-    const callback = (data: any) => {
-        if (data.tick) onTick(data.tick)
-    }
+    const callback = (data: any) => { if (data.tick) onTick(data.tick) }
 
     this.subscriptionHandlers.set(msgId, callback)
     this.subscriptionRegistry.set(msgId, { id: msgId, request, callback })
-
     this.ws?.send(JSON.stringify({ ...request, req_id: msgId }))
     return msgId
   }
 
   async fetchTicksHistoryWithSubscribe(symbol: string, count: number = 1000, onHistory: (data: any) => void, onTick: (data: any) => void): Promise<number | null> {
     await this.waitForConnection()
-
     const msgId = ++this.messageId
-    const request = {
-        ticks_history: symbol,
-        end: "latest",
-        count: count,
-        style: "ticks",
-        subscribe: 1
-    }
+    const request = { ticks_history: symbol, end: "latest", count: count, style: "ticks", subscribe: 1 }
 
     const callback = (data: any) => {
         if (data.history) onHistory(data.history)
@@ -378,24 +338,19 @@ class DerivAPI {
 
     this.subscriptionHandlers.set(msgId, callback)
     this.subscriptionRegistry.set(msgId, { id: msgId, request, callback })
-
     this.ws?.send(JSON.stringify({ ...request, req_id: msgId }))
     return msgId
   }
 
   async subscribeToBalance(onBalance: (data: any) => void): Promise<number | null> {
     await this.waitForConnection()
-    
     const msgId = ++this.messageId
     const request = { balance: 1, subscribe: 1 }
 
-    const callback = (data: any) => {
-        if (data.balance) onBalance(data.balance)
-    }
+    const callback = (data: any) => { if (data.balance) onBalance(data.balance) }
 
     this.subscriptionHandlers.set(msgId, callback)
     this.subscriptionRegistry.set(msgId, { id: msgId, request, callback })
-    
     this.ws?.send(JSON.stringify({ ...request, req_id: msgId }))
     return msgId
   }
@@ -403,7 +358,6 @@ class DerivAPI {
   async unsubscribe(reqId: number): Promise<void> {
     const ws = this.ws
     if (!ws || ws.readyState !== WebSocket.OPEN) {
-        // Even if socket is dead, we must clean our registry
         this.subscriptionHandlers.delete(reqId)
         this.subscriptionRegistry.delete(reqId)
         return
@@ -415,13 +369,8 @@ class DerivAPI {
 
   async subscribeToOpenContract(contractId: string, onUpdate: (data: any) => void): Promise<void> {
     await this.waitForConnection()
-    
     const msgId = ++this.messageId
-    const request = {
-       proposal_open_contract: 1,
-       contract_id: contractId,
-       subscribe: 1
-    }
+    const request = { proposal_open_contract: 1, contract_id: contractId, subscribe: 1 }
 
     const callback = (data: any) => {
         if (data.proposal_open_contract) {
@@ -435,7 +384,6 @@ class DerivAPI {
 
     this.subscriptionHandlers.set(msgId, callback)
     this.subscriptionRegistry.set(msgId, { id: msgId, request, callback })
-
     this.ws?.send(JSON.stringify({ ...request, req_id: msgId }))
   }
 }
