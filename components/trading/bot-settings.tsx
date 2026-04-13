@@ -7,8 +7,10 @@ import { Slider } from "@/components/ui/slider"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { 
-  Coins, Zap, ArrowRightLeft, Cpu, SlidersHorizontal 
+  Coins, Zap, ArrowRightLeft, Cpu, SlidersHorizontal, Loader2 
 } from "lucide-react"
+import { derivAPI } from "@/lib/deriv-api"
+import * as React from "react"
 
 interface BotSettingsProps {
   toolName?: string
@@ -17,25 +19,32 @@ interface BotSettingsProps {
   disabled?: boolean
 }
 
-const MARKETS = [
-  { value: "R_10", label: "Volatility 10 Index" },
-  { value: "R_25", label: "Volatility 25 Index" },
-  { value: "R_50", label: "Volatility 50 Index" },
-  { value: "R_75", label: "Volatility 75 Index" },
-  { value: "R_100", label: "Volatility 100 Index" },
-  { value: "1s_10", label: "Vol 10 (1s) Index" },
-  { value: "1s_25", label: "Vol 25 (1s) Index" },
-  { value: "1s_50", label: "Vol 50 (1s) Index" },
-  { value: "1s_75", label: "Vol 75 (1s) Index" },
-  { value: "1s_100", label: "Vol 100 (1s) Index" },
-  { value: "JD10", label: "Jump 10 Index" },
-  { value: "JD25", label: "Jump 25 Index" },
-  { value: "JD50", label: "Jump 50 Index" },
-  { value: "JD75", label: "Jump 75 Index" },
-  { value: "JD100", label: "Jump 100 Index" },
-]
-
 export function BotSettings({ toolName, settings, setSettings, disabled }: BotSettingsProps) {
+  const [activeMarkets, setActiveMarkets] = React.useState<any[]>([])
+  const [isLoadingMarkets, setIsLoadingMarkets] = React.useState(true)
+
+  React.useEffect(() => {
+    async function loadMarkets() {
+      try {
+        const markets = await derivAPI.getSyntheticMarkets()
+        const formatted = markets.map(m => ({
+          value: m.symbol,
+          label: m.display_name
+        }))
+        setActiveMarkets(formatted)
+        
+        // Ensure current setting is valid; if not, pick the first one
+        if (formatted.length > 0 && (!settings.market || !formatted.find((f: any) => f.value === settings.market))) {
+            setSettings((prev: any) => ({ ...prev, market: formatted[0].value }))
+        }
+      } catch (e) {
+        console.error("Failed to load markets:", e)
+      } finally {
+        setIsLoadingMarkets(false)
+      }
+    }
+    loadMarkets()
+  }, [])
   const update = (key: string, value: any) => {
     setSettings({ ...settings, [key]: value })
   }
@@ -57,11 +66,14 @@ export function BotSettings({ toolName, settings, setSettings, disabled }: BotSe
             <Label className="text-[10px] font-bold uppercase text-muted-foreground">Market Venue</Label>
             <Select disabled={disabled} value={settings.market} onValueChange={(v) => update('market', v)}>
                 <SelectTrigger className="bg-white/5 border-white/10 h-9 font-bold">
-                <SelectValue />
+                    <div className="flex items-center gap-2">
+                        {isLoadingMarkets && <Loader2 className="w-3 h-3 animate-spin text-teal-500" />}
+                        <SelectValue placeholder="Select Market" />
+                    </div>
                 </SelectTrigger>
-                <SelectContent>
-                {MARKETS.map(m => (
-                    <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                <SelectContent className="bg-zinc-950 border-white/10">
+                {activeMarkets.map(m => (
+                    <SelectItem key={m.value} value={m.value} className="text-white hover:bg-white/5">{m.label}</SelectItem>
                 ))}
                 </SelectContent>
             </Select>
