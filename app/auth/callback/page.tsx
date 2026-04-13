@@ -280,12 +280,40 @@ function AuthCallbackContent() {
         if (refreshToken) upsertPayload.deriv_refresh_token = refreshToken
         if (expiryDate) upsertPayload.deriv_access_token_expires_at = expiryDate
 
+        // Check if this is a first-time login for this account ID
+        const { data: existingUser } = await supabase
+            .from("users")
+            .select("id")
+            .eq(authFlow === "new_v2" ? "deriv_account_id" : "email", authFlow === "new_v2" ? primaryAccountId : userProfile.email)
+            .single()
+
+        const isNewUser = !existingUser
+
         // Use deriv_account_id as the conflict anchor for V2 — works even without a real email
         const conflictKey = authFlow === "new_v2" ? "deriv_account_id" : "email"
         const { error: dbError } = await supabase.from("users").upsert(upsertPayload, { onConflict: conflictKey })
 
         if (dbError) {
            console.error("Supabase upsert error:", dbError)
+        }
+
+        // Trigger Welcome Notification for new users
+        if (isNewUser) {
+            try {
+                await fetch("/api/notifications", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        userId: primaryAccountId,
+                        title: "Welcome to Derivex!",
+                        message: "We're excited to have you on board. Start by exploring our institutional trading tools and configuring your first session.",
+                        type: "success",
+                        forceSend: true // Internal flag to bypass read check if needed
+                    })
+                })
+            } catch (notifyErr) {
+                console.warn("[Callback] Failed to send welcome notification:", notifyErr)
+            }
         }
 
         // --- NEW: SESSION REGISTRATION ---

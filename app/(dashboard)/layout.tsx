@@ -5,6 +5,7 @@ import { TopNavbar } from "@/components/dashboard/top-navbar"
 
 import { SessionGuard } from "@/components/dashboard/session-guard"
 import { BotProvider } from "@/contexts/bot-context"
+import { ProfileCompletionPopup } from "@/components/dashboard/profile-popup"
 
 export default function DashboardLayout({
   children,
@@ -14,6 +15,7 @@ export default function DashboardLayout({
   return (
     <SessionGuard>
       <BotProvider>
+        <ProfileCompletionPopup />
         <SidebarProvider>
           <div className="flex h-screen max-h-screen w-full bg-black text-white overflow-hidden relative">
             <AppSidebar />

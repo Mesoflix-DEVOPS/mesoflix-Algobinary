@@ -24,6 +24,7 @@ import { SidebarTrigger } from "@/components/ui/sidebar"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 import { derivAPI } from "@/lib/deriv-api"
+import { NotificationDropdown } from "./notification-dropdown"
 
 export function TopNavbar() {
   const [user, setUser] = React.useState<any>(null)
@@ -284,10 +285,7 @@ export function TopNavbar() {
           <span className="text-[11px] font-bold text-white mt-1 uppercase">Encrypted</span>
         </div>
 
-        <Button variant="ghost" size="icon" className="text-gray-400 hover:text-teal-400 hover:bg-white/5 relative hidden md:flex">
-          <Bell className="w-5 h-5" />
-          <span className="absolute top-2 right-2 w-2 h-2 bg-teal-500 rounded-full border-2 border-black" />
-        </Button>
+        <NotificationDropdown />
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
