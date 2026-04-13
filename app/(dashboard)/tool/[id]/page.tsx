@@ -81,6 +81,8 @@ export default function SessionTraderPage() {
                 livePrice={bot.livePrice}
                 metrics={bot.metrics}
                 activeAcct={settings.activeAcct}
+                tradeMode={settings.tradeMode}
+                market={settings.market}
                 onStart={bot.startBot}
                 onStop={bot.stopBot}
                 onReset={bot.resetStats}

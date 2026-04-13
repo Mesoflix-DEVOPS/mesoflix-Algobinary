@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils"
 import { Eye, RefreshCw, History, Info } from "lucide-react"
 import { TradeHistoryModal } from "./trade-history-modal"
 import { Trade } from "@/contexts/bot-context"
+import { DigitDistribution } from "./digit-distribution"
 
 interface BotDisplayProps {
   state: BotState
@@ -23,6 +24,8 @@ interface BotDisplayProps {
   livePrice: number | null
   metrics: any
   activeAcct?: string
+  tradeMode?: string
+  market?: string
   onStart: () => void
   onStop: () => void
   onReset: () => void
@@ -32,6 +35,7 @@ interface BotDisplayProps {
 
 export function BotDisplay({ 
   state, stats, currentTrade, cooldownTime, livePrice, metrics, activeAcct,
+  tradeMode, market,
   onStart, onStop, onReset, onCloseTrade, tradeHistory 
 }: BotDisplayProps) {
   const [progress, setProgress] = useState(0)
@@ -159,6 +163,11 @@ export function BotDisplay({
                 </div>
             </Card>
         </div>
+
+        {/* Digit Distribution (Exclusive to Over/Under Mode) */}
+        {tradeMode === 'OVER_UNDER' && market && (
+           <DigitDistribution symbol={market} isActive={true} />
+        )}
 
         {/* Central ROI Counter */}
         <div className="relative flex flex-col items-center justify-center min-h-[240px] overflow-hidden rounded-2xl bg-black/40 border border-white/5 group">

@@ -362,6 +362,26 @@ class DerivAPI {
     return msgId
   }
 
+  async fetchTicksHistoryWithSubscribe(symbol: string, count: number = 1000, onHistory: (data: any) => void, onTick: (data: any) => void): Promise<number | null> {
+    await this.waitForConnection()
+
+    const msgId = ++this.messageId
+    this.subscriptionHandlers.set(msgId, (data) => {
+        if (data.history) onHistory(data.history)
+        if (data.tick) onTick(data.tick)
+    })
+
+    this.ws?.send(JSON.stringify({
+        ticks_history: symbol,
+        end: "latest",
+        count: count,
+        style: "ticks",
+        subscribe: 1,
+        req_id: msgId
+    }))
+    return msgId
+  }
+
   async subscribeToBalance(onBalance: (data: any) => void): Promise<number | null> {
     await this.waitForConnection()
     

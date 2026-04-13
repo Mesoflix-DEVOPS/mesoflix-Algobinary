@@ -1,4 +1,4 @@
-'use client'
+"use client"
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -7,8 +7,7 @@ import { Slider } from "@/components/ui/slider"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { 
-  Settings2, Coins, Target, Octagon, Zap,
-  ArrowRightLeft, Cpu, SlidersHorizontal 
+  Coins, Zap, ArrowRightLeft, Cpu, SlidersHorizontal 
 } from "lucide-react"
 
 interface BotSettingsProps {
@@ -24,12 +23,24 @@ const MARKETS = [
   { value: "R_50", label: "Volatility 50 Index" },
   { value: "R_75", label: "Volatility 75 Index" },
   { value: "R_100", label: "Volatility 100 Index" },
+  { value: "1s_10", label: "Vol 10 (1s) Index" },
+  { value: "1s_25", label: "Vol 25 (1s) Index" },
+  { value: "1s_50", label: "Vol 50 (1s) Index" },
+  { value: "1s_75", label: "Vol 75 (1s) Index" },
+  { value: "1s_100", label: "Vol 100 (1s) Index" },
+  { value: "JD10", label: "Jump 10 Index" },
+  { value: "JD25", label: "Jump 25 Index" },
+  { value: "JD50", label: "Jump 50 Index" },
+  { value: "JD75", label: "Jump 75 Index" },
+  { value: "JD100", label: "Jump 100 Index" },
 ]
 
 export function BotSettings({ toolName, settings, setSettings, disabled }: BotSettingsProps) {
   const update = (key: string, value: any) => {
     setSettings({ ...settings, [key]: value })
   }
+
+  const isOverUnder = toolName?.toLowerCase().includes('over') || toolName?.toLowerCase().includes('under') || settings.tradeMode === 'OVER_UNDER'
 
   return (
     <Card className="bg-black/40 border-white/5 backdrop-blur-xl flex flex-col min-h-fit">
@@ -41,29 +52,95 @@ export function BotSettings({ toolName, settings, setSettings, disabled }: BotSe
         <CardDescription>Algorithmic sensitivity & Risk limits</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6 pt-6">
-        {/* Mode Switcher */}
-        <div className="space-y-3">
-            <Label className="text-[10px] uppercase tracking-widest text-muted-foreground flex items-center gap-2 font-black">
-                <ArrowRightLeft className="w-3 h-3" />
-                Execution Mode
-            </Label>
-            {(toolName?.toLowerCase().includes('over') || toolName?.toLowerCase().includes('under')) ? (
-                <Tabs 
-                    value={settings.tradeMode === 'OVER_UNDER' ? 'OVER_UNDER' : 'OVER_UNDER'} 
-                    onValueChange={(v) => update('tradeMode', v)}
-                    className="w-full"
-                >
-                    <TabsList className="grid w-full grid-cols-1 bg-white/5 border border-white/10 h-10 p-1">
-                        <TabsTrigger 
-                            value="OVER_UNDER" 
-                            disabled={disabled}
-                            className="data-[state=active]:bg-teal-500 data-[state=active]:text-black font-black text-[9px] tracking-widest uppercase"
-                        >
-                            Over / Under 
-                        </TabsTrigger>
-                    </TabsList>
-                </Tabs>
-            ) : (
+        {/* Market Venue */}
+        <div className="space-y-1.5 pt-2">
+            <Label className="text-[10px] font-bold uppercase text-muted-foreground">Market Venue</Label>
+            <Select disabled={disabled} value={settings.market} onValueChange={(v) => update('market', v)}>
+                <SelectTrigger className="bg-white/5 border-white/10 h-9 font-bold">
+                <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                {MARKETS.map(m => (
+                    <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                ))}
+                </SelectContent>
+            </Select>
+        </div>
+
+        {isOverUnder ? (
+          // ─── OVER/UNDER Configuration ────────────────────────────────
+          <>
+            <div className="space-y-4 pt-4 border-t border-white/5">
+                <div className="space-y-3">
+                    <Label className="text-[10px] uppercase tracking-widest text-muted-foreground flex items-center gap-2 font-black">
+                        <ArrowRightLeft className="w-3 h-3" />
+                        Trading Side
+                    </Label>
+                    <Tabs 
+                        value={settings.ouSide || 'OVER'} 
+                        onValueChange={(v) => {
+                            update('ouSide', v)
+                            update('ouTarget', v === 'OVER' ? 1 : 8)
+                        }}
+                        className="w-full"
+                    >
+                        <TabsList className="grid w-full grid-cols-2 bg-white/5 border border-white/10 h-10 p-1">
+                            <TabsTrigger 
+                                value="OVER" 
+                                disabled={disabled}
+                                className="data-[state=active]:bg-teal-500 data-[state=active]:text-black font-black text-[9px] tracking-widest uppercase"
+                            >
+                                Over
+                            </TabsTrigger>
+                            <TabsTrigger 
+                                value="UNDER" 
+                                disabled={disabled}
+                                className="data-[state=active]:bg-teal-500 data-[state=active]:text-black font-black text-[9px] tracking-widest uppercase"
+                            >
+                                Under
+                            </TabsTrigger>
+                        </TabsList>
+                    </Tabs>
+                </div>
+
+                <div className="space-y-3">
+                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">Prediction Target</Label>
+                    <Select 
+                      disabled={disabled} 
+                      value={String(settings.ouTarget || (settings.ouSide === 'UNDER' ? 8 : 1))} 
+                      onValueChange={(v) => update('ouTarget', Number(v))}
+                    >
+                        <SelectTrigger className="bg-white/5 border-white/10 h-9 font-bold">
+                           <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                           {settings.ouSide === 'UNDER' ? (
+                               // UNDER SIDE OPTIONS
+                               <>
+                                 <SelectItem value="8">Under 8</SelectItem>
+                                 <SelectItem value="7">Under 7</SelectItem>
+                               </>
+                           ) : (
+                               // OVER SIDE OPTIONS
+                               <>
+                                 <SelectItem value="1">Over 1</SelectItem>
+                                 <SelectItem value="2">Over 2</SelectItem>
+                                 <SelectItem value="3">Over 3</SelectItem>
+                               </>
+                           )}
+                        </SelectContent>
+                    </Select>
+                </div>
+            </div>
+          </>
+        ) : (
+          // ─── STANDARD Configuration ────────────────────────────────
+          <>
+            <div className="space-y-3 pt-4 border-t border-white/5">
+                <Label className="text-[10px] uppercase tracking-widest text-muted-foreground flex items-center gap-2 font-black">
+                    <ArrowRightLeft className="w-3 h-3" />
+                    Execution Mode
+                </Label>
                 <Tabs 
                     value={settings.tradeMode !== 'OVER_UNDER' ? settings.tradeMode : 'NO_TOUCH'} 
                     onValueChange={(v) => update('tradeMode', v)}
@@ -86,49 +163,74 @@ export function BotSettings({ toolName, settings, setSettings, disabled }: BotSe
                         </TabsTrigger>
                     </TabsList>
                 </Tabs>
-            )}
-        </div>
-
-        {/* Strategic Tuning */}
-        <div className="p-4 rounded-xl bg-teal-500/5 border border-teal-500/10 space-y-5">
-            <div className="flex items-center gap-2 mb-2">
-                <SlidersHorizontal className="w-3.5 h-3.5 text-teal-400" />
-                <span className="text-[10px] font-black uppercase tracking-widest text-teal-400">Statistical Engine</span>
             </div>
 
-            <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">K-Multiplier</Label>
-                    <span className="text-xs font-mono font-bold text-teal-400">{settings.kMultiplier}x</span>
+            <div className="p-4 rounded-xl bg-teal-500/5 border border-teal-500/10 space-y-5">
+                <div className="flex items-center gap-2 mb-2">
+                    <SlidersHorizontal className="w-3.5 h-3.5 text-teal-400" />
+                    <span className="text-[10px] font-black uppercase tracking-widest text-teal-400">Statistical Engine</span>
                 </div>
-                <Slider
-                    disabled={disabled}
-                    value={[settings.kMultiplier]}
-                    min={6}
-                    max={20}
-                    step={1}
-                    onValueChange={([v]) => update('kMultiplier', v)}
-                />
-            </div>
 
-            <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">Vol-Threshold</Label>
-                    <span className="text-xs font-mono font-bold text-teal-400">{settings.volatilityThreshold}</span>
+                <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                        <Label className="text-[10px] uppercase font-bold text-muted-foreground">K-Multiplier</Label>
+                        <span className="text-xs font-mono font-bold text-teal-400">{settings.kMultiplier}x</span>
+                    </div>
+                    <Slider
+                        disabled={disabled}
+                        value={[settings.kMultiplier]}
+                        min={6}
+                        max={20}
+                        step={1}
+                        onValueChange={([v]) => update('kMultiplier', v)}
+                    />
                 </div>
-                <Slider
-                    disabled={disabled}
-                    value={[settings.volatilityThreshold]}
-                    min={0.1}
-                    max={2.0}
-                    step={0.1}
-                    onValueChange={([v]) => update('volatilityThreshold', v)}
-                />
-            </div>
-        </div>
 
-        {/* Stake & Risk */}
-        <div className="space-y-4">
+                <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                        <Label className="text-[10px] uppercase font-bold text-muted-foreground">Vol-Threshold</Label>
+                        <span className="text-xs font-mono font-bold text-teal-400">{settings.volatilityThreshold}</span>
+                    </div>
+                    <Slider
+                        disabled={disabled}
+                        value={[settings.volatilityThreshold]}
+                        min={0.1}
+                        max={2.0}
+                        step={0.1}
+                        onValueChange={([v]) => update('volatilityThreshold', v)}
+                    />
+                </div>
+            </div>
+
+            <div className="space-y-4 pt-4 border-t border-white/5">
+              <div className="grid grid-cols-2 gap-3 pb-2">
+                <div className="space-y-1.5">
+                    <Label className="text-[9px] uppercase font-bold text-muted-foreground">Take Profit</Label>
+                    <Input
+                        disabled={disabled}
+                        type="number"
+                        value={settings.takeProfit}
+                        onChange={(e) => update('takeProfit', Number(e.target.value))}
+                        className="bg-white/5 border-white/10 h-8 font-mono text-center text-xs"
+                    />
+                </div>
+                <div className="space-y-1.5">
+                    <Label className="text-[9px] uppercase font-bold text-muted-foreground">Stop Loss</Label>
+                    <Input
+                        disabled={disabled}
+                        type="number"
+                        value={settings.stopLoss}
+                        onChange={(e) => update('stopLoss', Number(e.target.value))}
+                        className="bg-white/5 border-white/10 h-8 font-mono text-center text-xs"
+                    />
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Universal Settings: Stake & Martingale */}
+        <div className="space-y-4 pt-4 border-t border-white/5">
           <div className="flex items-center justify-between">
             <Label className="flex items-center gap-2 text-xs font-bold uppercase tracking-tighter text-muted-foreground">
               <Coins className="w-4 h-4" />
@@ -142,107 +244,38 @@ export function BotSettings({ toolName, settings, setSettings, disabled }: BotSe
               className="bg-white/5 border-white/10 w-24 h-8 text-right font-black text-teal-400"
             />
           </div>
-          
-          <div className="grid grid-cols-2 gap-3 pb-2">
-            <div className="space-y-1.5">
-                <Label className="text-[9px] uppercase font-bold text-muted-foreground">Take Profit</Label>
-                <Input
-                    disabled={disabled}
-                    type="number"
-                    value={settings.takeProfit}
-                    onChange={(e) => update('takeProfit', Number(e.target.value))}
-                    className="bg-white/5 border-white/10 h-8 font-mono text-center text-xs"
-                />
-            </div>
-            <div className="space-y-1.5">
-                <Label className="text-[9px] uppercase font-bold text-muted-foreground">Stop Loss</Label>
-                <Input
-                    disabled={disabled}
-                    type="number"
-                    value={settings.stopLoss}
-                    onChange={(e) => update('stopLoss', Number(e.target.value))}
-                    className="bg-white/5 border-white/10 h-8 font-mono text-center text-xs"
-                />
-            </div>
-          </div>
         </div>
 
         <div className="space-y-4 pt-4 border-t border-white/5">
-          <div className="space-y-1.5">
-            <Label className="text-[10px] font-bold uppercase text-muted-foreground">Market Venue</Label>
-            <Select disabled={disabled} value={settings.market} onValueChange={(v) => update('market', v)}>
-                <SelectTrigger className="bg-white/5 border-white/10 h-9 font-bold">
-                <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                {MARKETS.map(m => (
-                    <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
-                ))}
-                </SelectContent>
-            </Select>
-            {/* Over/Under Barriers - ONLY for Over/Under */}
-            {(toolName?.toLowerCase().includes('over') || toolName?.toLowerCase().includes('under') || settings.tradeMode === 'OVER_UNDER') && (
-            <div className="mt-4 space-y-3">
-              <Label className="text-[10px] uppercase font-bold text-muted-foreground">Over Target</Label>
+          <Label className="text-[10px] font-bold uppercase text-muted-foreground flex items-center gap-2">
+            <Zap className="w-3.5 h-3.5" />
+            Martingale System
+          </Label>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-[9px] font-bold text-muted-foreground">Multiplier</Label>
               <Input
                 disabled={disabled}
                 type="number"
-                value={settings.overBarrier}
-                onChange={(e) => update('overBarrier', Number(e.target.value))}
-                className="bg-white/5 border-white/10 h-8"
+                value={settings.martingaleMultiplier}
+                onChange={(e) => update('martingaleMultiplier', Number(e.target.value))}
+                step="0.1"
+                className="bg-white/5 border-white/10 h-8 font-mono text-center text-xs"
               />
-              <Label className="text-[10px] uppercase font-bold text-muted-foreground">Under Target</Label>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-[9px] font-bold text-muted-foreground">Max Steps</Label>
               <Input
                 disabled={disabled}
                 type="number"
-                value={settings.underBarrier}
-                onChange={(e) => update('underBarrier', Number(e.target.value))}
-                className="bg-white/5 border-white/10 h-8"
+                value={settings.martingaleLevel}
+                onChange={(e) => update('martingaleLevel', Number(e.target.value))}
+                className="bg-white/5 border-white/10 h-8 font-mono text-center text-xs"
               />
             </div>
-            )}
-            {/* Recovery Strategy */}
-            <div className="mt-4 space-y-3">
-              <Label className="text-[10px] uppercase font-bold text-muted-foreground">Recovery Strategy</Label>
-              <Select disabled={disabled} value={settings.recoveryStrategy} onValueChange={(v) => update('recoveryStrategy', v)}>
-                <SelectTrigger className="bg-white/5 border-white/10 h-9 font-bold">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="martingale">Martingale</SelectItem>
-                  <SelectItem value="fixed">Fixed Step</SelectItem>
-                </SelectContent>
-              </Select>
-              {settings.recoveryStrategy === 'fixed' && (
-                <>
-                  <Label className="text-[10px] uppercase font-bold text-muted-foreground">Recovery Step (USD)</Label>
-                  <Input
-                    disabled={disabled}
-                    type="number"
-                    value={settings.recoveryStep}
-                    onChange={(e) => update('recoveryStep', Number(e.target.value))}
-                    className="bg-white/5 border-white/10 h-8"
-                  />
-                </>
-              )}
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <Label className="flex items-center gap-2 text-[10px] uppercase font-bold text-muted-foreground">
-                <Zap className="w-3 h-3 text-yellow-500" />
-                Session Trade Limit: {settings.maxTrades}
-            </Label>
-            <Slider
-              disabled={disabled}
-              value={[settings.maxTrades]}
-              min={1}
-              max={50}
-              step={1}
-              onValueChange={([v]) => update('maxTrades', v)}
-            />
           </div>
         </div>
+
       </CardContent>
     </Card>
   )
