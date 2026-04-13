@@ -1,8 +1,9 @@
 // Deriv API Integration
-// App ID: 114779
+// V2 App ID: 32yJRED9hXmlYiayhK1VZ
+// Legacy App ID: 114779
 
-const DERIV_APP_ID = process.env.NEXT_PUBLIC_DERIV_APP_ID || "114779"
-const DERIV_API_URL = `wss://ws.derivws.com/websockets/v3?app_id=${DERIV_APP_ID}`
+const V2_APP_ID = process.env.NEXT_PUBLIC_DERIV_APP_ID || "32yJRED9hXmlYiayhK1VZ"
+const LEGACY_APP_ID = "114779"
 
 class DerivAPI {
   private ws: WebSocket | null = null
@@ -12,6 +13,7 @@ class DerivAPI {
   private isConnected = false
   private pingInterval: any = null
   private connectionPromise: Promise<void> | null = null
+  public currentAuthFlow: "legacy" | "new_v2" = "legacy"
 
   async connect(): Promise<void> {
     if (this.connectionPromise && (this.ws?.readyState === WebSocket.CONNECTING || this.ws?.readyState === WebSocket.OPEN)) {
@@ -20,10 +22,18 @@ class DerivAPI {
 
     if (this.pingInterval) clearInterval(this.pingInterval)
     
+    // Determine which app ID to use based on the saved auth flow
+    if (typeof window !== "undefined") {
+        this.currentAuthFlow = (localStorage.getItem("derivex_auth_flow") as any) || "legacy"
+    }
+    
+    const appId = this.currentAuthFlow === "new_v2" ? V2_APP_ID : LEGACY_APP_ID
+    const wsUrl = `wss://ws.derivws.com/websockets/v3?app_id=${appId}`
+    
     this.connectionPromise = new Promise((resolve, reject) => {
       try {
-        console.log("[DerivAPI] Connecting to:", DERIV_API_URL)
-        this.ws = new WebSocket(DERIV_API_URL)
+        console.log(`[DerivAPI] Connecting to dynamically resolved endpoint (Flow: ${this.currentAuthFlow}):`, wsUrl)
+        this.ws = new WebSocket(wsUrl)
 
         this.ws.onopen = () => {
           console.log("[DerivAPI] Connection established")
@@ -175,20 +185,31 @@ class DerivAPI {
     symbol: string
     barrier?: string
   }): Promise<any> {
-    const payload: any = {
-      buy: 1,
-      parameters: {
+    const parameters: Record<string, any> = {
         amount: params.amount,
         basis: "stake",
         contract_type: params.contractType,
         currency: params.currency,
         duration: params.duration,
         duration_unit: params.duration_unit,
-        symbol: params.symbol,
-      },
-      price: params.amount 
     }
-    if (params.barrier) payload.parameters.barrier = params.barrier
+    
+    // In V2, 'symbol' parameter is renamed to 'underlying_symbol', 
+    // but the `ticks` endpoint and `buy: parameters` might differ.
+    // For safety, pass both if we are unsure, but the v2 explicitly demands underlying_symbol.
+    if (this.currentAuthFlow === "new_v2") {
+        parameters.underlying_symbol = params.symbol
+    } else {
+        parameters.symbol = params.symbol
+    }
+
+    if (params.barrier) parameters.barrier = params.barrier
+
+    const payload: any = {
+      buy: 1,
+      price: params.amount,
+      parameters
+    }
     return this.send(payload)
   }
 

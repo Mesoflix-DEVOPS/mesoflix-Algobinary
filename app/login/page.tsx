@@ -3,7 +3,8 @@
 import { useRouter } from "next/navigation"
 import dynamic from "next/dynamic"
 import { Button } from "@/components/ui/button"
-import { Lock } from "lucide-react"
+import { Lock, Loader2 } from "lucide-react"
+import { useState } from "react"
 
 const MainScene = dynamic(() => import("@/components/main-scene").then(mod => mod.MainScene), {
   ssr: false,
@@ -11,6 +12,57 @@ const MainScene = dynamic(() => import("@/components/main-scene").then(mod => mo
 
 export default function LoginPage() {
   const router = useRouter()
+  const [isAuthenticating, setIsAuthenticating] = useState(false)
+
+  const handleLogin = async () => {
+    setIsAuthenticating(true)
+    
+    try {
+      // 1. Generate a random code_verifier
+      const array = crypto.getRandomValues(new Uint8Array(64))
+      const codeVerifier = Array.from(array)
+        .map(v => 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~'[v % 66])
+        .join('')
+        
+      // 2. Derive the code_challenge
+      const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(codeVerifier))
+      const codeChallenge = btoa(String.fromCharCode(...new Uint8Array(hash)))
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '')
+        
+      // 3. Generate a random state for CSRF protection
+      const state = crypto.getRandomValues(new Uint8Array(16))
+        .reduce((s, b) => s + b.toString(16).padStart(2, '0'), '')
+        
+      // 4. Store code_verifier and state before redirecting
+      sessionStorage.setItem('pkce_code_verifier', codeVerifier)
+      sessionStorage.setItem('oauth_state', state)
+      
+      // Fallback via cookies just in case the browser clears session storage across different origin redirects
+      document.cookie = `oauth_state=${state}; path=/; max-age=3600; SameSite=Lax`
+      document.cookie = `pkce_code_verifier=${codeVerifier}; path=/; max-age=3600; SameSite=Lax`
+
+      const appId = "32yJRED9hXmlYiayhK1VZ"
+      const legacyAppId = "114779"
+      const redirectUri = `${window.location.origin}/auth/callback`
+      
+      const authUrl = new URL('https://oauth.deriv.com/oauth2/authorize')
+      authUrl.searchParams.set('response_type', 'code')
+      authUrl.searchParams.set('client_id', appId)
+      authUrl.searchParams.set('redirect_uri', redirectUri)
+      authUrl.searchParams.set('scope', 'read trade') // Adjust scopes if needing account_manage
+      authUrl.searchParams.set('state', state)
+      authUrl.searchParams.set('code_challenge', codeChallenge)
+      authUrl.searchParams.set('code_challenge_method', 'S256')
+      authUrl.searchParams.set('app_id', legacyAppId) // This tells Deriv where to route legacy token users
+      
+      window.location.href = authUrl.toString()
+    } catch (error) {
+      console.error("Failed to initiate OAuth flow:", error)
+      setIsAuthenticating(false)
+    }
+  }
 
   return (
     <main className="relative w-full h-screen overflow-hidden bg-black">
@@ -31,18 +83,24 @@ export default function LoginPage() {
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center pointer-events-auto">
             <Button
+              disabled={isAuthenticating}
               className="bg-teal-500 hover:bg-teal-600 text-black font-bold px-8 py-6 text-lg rounded-xl shadow-[0_0_20px_rgba(20,184,166,0.3)] transition-all hover:scale-105"
-              onClick={() => {
-                const appId = "114779";
-                window.location.href = `https://oauth.deriv.com/oauth2/authorize?app_id=${appId}&l=EN&brand=deriv`;
-              }}
+              onClick={handleLogin}
             >
-              Connect with Deriv
+              {isAuthenticating ? (
+                <>
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                    Connecting...
+                </>
+              ) : (
+                "Connect with Deriv"
+              )}
             </Button>
             <Button
                 variant="outline"
                 className="border-white/10 text-gray-400 hover:bg-white/5 px-8 py-6 text-lg rounded-xl"
                 onClick={() => router.push("/")}
+                disabled={isAuthenticating}
             >
                 Back to Home
             </Button>

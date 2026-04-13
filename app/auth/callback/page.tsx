@@ -68,25 +68,82 @@ function AuthCallbackContent() {
     async function processAuth() {
       try {
         // 1. EXTRACTING
+        const code = searchParams.get("code")
+        const stateParam = searchParams.get("state")
         const accountList: any[] = []
+        let primaryToken = ""
+        let authFlow: "legacy" | "new_v2" = "legacy"
         
-        // Deriv sends back token1, acct1, cur1, token2, acct2, cur2 etc.
-        let i = 1
-        while (searchParams.get(`token${i}`)) {
-          accountList.push({
-            token: searchParams.get(`token${i}`),
-            account: searchParams.get(`acct${i}`),
-            currency: searchParams.get(`cur${i}`) || "USD"
-          })
-          i++
-        }
+        if (code && stateParam) {
+          // --- V2 Flow: OAuth 2.0 PKCE Exchange ---
+          authFlow = "new_v2"
+          const storedState = sessionStorage.getItem('oauth_state') || 
+            document.cookie.split('; ').find(row => row.startsWith('oauth_state='))?.split('=')[1]
+          const codeVerifier = sessionStorage.getItem('pkce_code_verifier') ||
+            document.cookie.split('; ').find(row => row.startsWith('pkce_code_verifier='))?.split('=')[1]
 
-        if (accountList.length === 0) {
-          throw new Error("No authorization tokens found in redirect.")
+          if (!storedState || stateParam !== storedState) {
+            throw new Error("State mismatch. Potential CSRF attack.")
+          }
+          if (!codeVerifier) {
+            throw new Error("Missing PKCE code verifier.")
+          }
+
+          setStep("CONNECTING") // We are doing network call, move to connecting visually
+          const appId = "32yJRED9hXmlYiayhK1VZ"
+          
+          const params = new URLSearchParams()
+          params.append('grant_type', 'authorization_code')
+          params.append('client_id', appId)
+          params.append('code', code)
+          params.append('code_verifier', codeVerifier)
+          params.append('redirect_uri', `${window.location.origin}/auth/callback`)
+
+          const response = await fetch('https://oauth.deriv.com/oauth2/token', {
+             method: 'POST',
+             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+             body: params.toString()
+          })
+
+          if (!response.ok) {
+             const errData = await response.json()
+             throw new Error(errData.error_description || "Token exchange failed.")
+          }
+
+          const data = await response.json()
+          primaryToken = data.access_token
+
+          accountList.push({
+             token: primaryToken,
+             account: "OAuth2", // Temporarily set, real account fetched during authorize() below
+             currency: "USD" 
+          })
+
+          sessionStorage.removeItem('oauth_state')
+          sessionStorage.removeItem('pkce_code_verifier')
+          document.cookie = "oauth_state=; max-age=0; path=/";
+          document.cookie = "pkce_code_verifier=; max-age=0; path=/";
+
+        } else {
+          // --- Legacy Flow Tracking ---
+          let i = 1
+          while (searchParams.get(`token${i}`)) {
+            accountList.push({
+              token: searchParams.get(`token${i}`),
+              account: searchParams.get(`acct${i}`),
+              currency: searchParams.get(`cur${i}`) || "USD"
+            })
+            i++
+          }
+
+          if (accountList.length === 0) {
+            throw new Error("No authorization tokens found in redirect.")
+          }
+          primaryToken = accountList[0].token
         }
 
         await new Promise(r => setTimeout(r, 800)) // Animation buffer
-        setStep("CONNECTING")
+        setStep(authFlow === "new_v2" ? "AUTHORIZING" : "CONNECTING") 
 
         // 2. CONNECTING
         try {
@@ -100,10 +157,8 @@ function AuthCallbackContent() {
         await new Promise(r => setTimeout(r, 800))
         setStep("AUTHORIZING")
 
-        // 3. AUTHORIZING (Use the FIRST account as primary)
-        const primaryAccount = accountList[0]
-        
-        const authResponse = await derivAPI.authorize(primaryAccount.token)
+        // 3. AUTHORIZING (Use the primary token)
+        const authResponse = await derivAPI.authorize(primaryToken)
         if (authResponse.error) {
           throw new Error(authResponse.error.message)
         }
@@ -113,13 +168,23 @@ function AuthCallbackContent() {
 
         // 4. SYNCING (Save to Supabase & Register Session)
         const userData = authResponse.authorize
+        
+        // Correct the acct if we are in V2 flow where it wasn't available in URL
+        if (authFlow === "new_v2") {
+            accountList[0].account = userData.loginid
+            accountList[0].currency = userData.currency || "USD"
+        }
+
+        const primaryAccount = accountList[0]
+
         const { error: dbError } = await supabase.from("users").upsert({
           email: userData.email,
           username: userData.fullname || userData.loginid,
           full_name: userData.fullname,
           deriv_account_id: userData.loginid,
-          deriv_token: primaryAccount.token,
+          deriv_token: primaryToken,
           balance: userData.balance || 0,
+          auth_flow: authFlow // Save the specific flow used
         }, { onConflict: 'email' })
 
         if (dbError) {
@@ -145,17 +210,18 @@ function AuthCallbackContent() {
         }
 
         // Store session in localStorage and Cookies (for Middleware)
-        localStorage.setItem("derivex_token", primaryAccount.token)
+        localStorage.setItem("derivex_token", primaryToken)
         localStorage.setItem("derivex_acct", primaryAccount.account)
         localStorage.setItem("derivex_user", JSON.stringify(userData))
         localStorage.setItem("derivex_accounts", JSON.stringify(accountList))
+        localStorage.setItem("derivex_auth_flow", authFlow)
         
         if (sessionData) {
             localStorage.setItem("derivex_session_id", sessionData.session_token)
         }
         
         // Set cookie manually for Next.js Middleware
-        document.cookie = `derivex_token=${primaryAccount.token}; path=/; max-age=604800; samesite=lax`;
+        document.cookie = `derivex_token=${primaryToken}; path=/; max-age=604800; samesite=lax`;
 
         await new Promise(r => setTimeout(r, 800))
         setStep("FINALIZING")
