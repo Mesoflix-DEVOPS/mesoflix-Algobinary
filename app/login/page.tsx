@@ -46,10 +46,9 @@ export default function LoginPage() {
 
       const redirectUri = `${window.location.origin}/auth/callback`
       
-      const authUrl = new URL(`${derivConfig.OAUTH_URL}/oauth2/authorize`)
+      const authUrl = new URL(`${derivConfig.OAUTH_URL}/oauth2/auth`)
       authUrl.searchParams.set('response_type', 'code')
       authUrl.searchParams.set('client_id', derivConfig.CLIENT_ID)
-      authUrl.searchParams.set('app_id', derivConfig.LEGACY_APP_ID)
       authUrl.searchParams.set('redirect_uri', redirectUri)
       authUrl.searchParams.set('state', state)
       authUrl.searchParams.set('code_challenge', codeChallenge)

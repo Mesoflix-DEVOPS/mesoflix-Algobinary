@@ -10,5 +10,5 @@ export const derivConfig = {
     LEGACY_APP_ID: process.env.NEXT_PUBLIC_DERIV_LEGACY_APP_ID || "114779",
     
     // OAuth Base URL
-    OAUTH_URL: process.env.NEXT_PUBLIC_DERIV_OAUTH_BASE_URL || "https://oauth.deriv.com",
+    OAUTH_URL: process.env.NEXT_PUBLIC_DERIV_OAUTH_BASE_URL || "https://auth.deriv.com",
 };
