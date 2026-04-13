@@ -215,63 +215,77 @@ function AuthCallbackContent() {
         // 4. SYNCING (Save to Supabase & Register Session)
         const userData = authResponse.authorize
 
-        // For V2 fetch the real user profile from OAuth userinfo endpoint
+        // Build user profile — V2 OIDC userinfo doesn't expose PII to third-party apps.
+        // We generate a professional pseudonym from the account ID and let user edit it.
+        const primaryAccountId = accountList.find(a => !a.isDemo)?.account || accountList[0]?.account || userData.loginid
+        const traderPseudonym = `Trader_${primaryAccountId}`
+        const systemEmail = `${primaryAccountId.toLowerCase()}@v2.derivex.local`
+
         let userProfile: any = {
-            email: userData.email,
-            fullname: userData.fullname,
-            loginid: userData.loginid,
-            currency: userData.currency || "USD",
-            balance: userData.balance || 0
+            email: systemEmail,
+            fullname: traderPseudonym,
+            loginid: primaryAccountId,
+            currency: (accountList.find(a => !a.isDemo) || accountList[0])?.currency || "USD",
+            balance: 0,
+            oidcSub: null
         }
 
         if (authFlow === "new_v2") {
             try {
-                // Call our server-side proxy to avoid CORS — auth.deriv.com blocks direct browser requests
                 const profileRes = await fetch(`/api/auth/deriv/userinfo`, {
                     headers: { "Authorization": `Bearer ${primaryToken}` }
                 })
                 if (profileRes.ok) {
                     const profile = await profileRes.json()
-                    console.log("[Callback] V2 userinfo:", profile)
-                    userProfile.email = profile.email || userProfile.email
-                    userProfile.fullname = profile.name ||
-                        ((profile.given_name || "") + (profile.family_name ? " " + profile.family_name : "")).trim() ||
-                        userProfile.fullname
+                    console.log("[Callback] V2 userinfo fields:", Object.keys(profile))
+                    // Extract whatever the OIDC provider exposes
+                    userProfile.oidcSub = profile.sub || null
+                    if (profile.email) userProfile.email = profile.email
+                    if (profile.name) userProfile.fullname = profile.name
+                    else if (profile.given_name) userProfile.fullname = [profile.given_name, profile.family_name].filter(Boolean).join(" ")
+                    else if (profile.preferred_username) userProfile.fullname = profile.preferred_username
+                    // Fall back to pseudonym if nothing useful was exposed
+                    if (!userProfile.fullname || userProfile.fullname.trim() === "") userProfile.fullname = traderPseudonym
                 }
             } catch (e) {
                 console.warn("[Callback] Could not fetch userinfo:", e)
             }
         }
 
-        // For V2 the real account was already fetched and set; update any UNKNOWN placeholder
+        // Fix up UNKNOWN placeholder if needed
         if (authFlow === "new_v2" && accountList.length === 1 && accountList[0].account === "UNKNOWN_V2") {
-            accountList[0].account = userData.loginid
-            accountList[0].currency = userData.currency || "USD"
+            accountList[0].account = primaryAccountId
+            accountList[0].currency = userProfile.currency
         }
 
-        const primaryAccount = accountList[0] || { account: userData.loginid }
+        // primaryAccount — the real/primary account entry for this session
+        const primaryAccount = accountList.find(a => !a.isDemo) || accountList[0] || { account: primaryAccountId, currency: "USD" }
+
         const expiryDate = tokenExpiry > 0 ? new Date(Date.now() + tokenExpiry * 1000).toISOString() : null
 
-        // Upsert core fields; deriv_refresh_token requires the migration in 03_auth_flow.sql to be run first.
+        // For V2 users: use deriv_account_id as conflict key since email may be a system pseudonym.
+        // For legacy users: use email as conflict key (real email is always present).
         const upsertPayload: any = {
           email: userProfile.email,
-          username: userProfile.fullname || userData.loginid,
+          username: userProfile.fullname,
           full_name: userProfile.fullname,
-          deriv_account_id: userData.loginid,
+          deriv_account_id: primaryAccountId,
           deriv_token: primaryToken,
           balance: userProfile.balance || 0,
-          auth_flow: authFlow
+          auth_flow: authFlow,
+          // Flag that this profile needs to be completed by the user
+          profile_complete: authFlow === "legacy" // V2 users need to fill in their details
         }
 
-        // Only include refresh token fields if values are present (migration may not have run yet)
         if (refreshToken) upsertPayload.deriv_refresh_token = refreshToken
         if (expiryDate) upsertPayload.deriv_access_token_expires_at = expiryDate
 
-        const { error: dbError } = await supabase.from("users").upsert(upsertPayload, { onConflict: 'email' })
+        // Use deriv_account_id as the conflict anchor for V2 — works even without a real email
+        const conflictKey = authFlow === "new_v2" ? "deriv_account_id" : "email"
+        const { error: dbError } = await supabase.from("users").upsert(upsertPayload, { onConflict: conflictKey })
 
         if (dbError) {
-           console.error("Supabase sync error:", dbError)
-           // Non-fatal — session data is already in localStorage, redirect can proceed
+           console.error("Supabase upsert error:", dbError)
         }
 
         // --- NEW: SESSION REGISTRATION ---
@@ -279,7 +293,7 @@ function AuthCallbackContent() {
         const { data: sessionData, error: sessionError } = await supabase
             .from("user_sessions")
             .insert({
-                user_id: userData.loginid,
+                user_id: primaryAccountId,
                 device_name: deviceName,
                 device_type: deviceType,
                 ip_address: "Client Side Detection",
@@ -300,9 +314,10 @@ function AuthCallbackContent() {
             ...userData,
             email: userProfile.email,
             fullname: userProfile.fullname,
-            loginid: userData.loginid,
-            currency: primaryAccount.currency || userData.currency || "USD",
-            balance: userProfile.balance
+            loginid: primaryAccountId,
+            currency: primaryAccount.currency || "USD",
+            balance: userProfile.balance,
+            profile_complete: authFlow === "legacy"
         }))
         localStorage.setItem("derivex_accounts", JSON.stringify(accountList))
         localStorage.setItem("derivex_auth_flow", authFlow)
