@@ -49,6 +49,7 @@ export default function LoginPage() {
       const authUrl = new URL('https://oauth.deriv.com/oauth2/authorize')
       authUrl.searchParams.set('response_type', 'code')
       authUrl.searchParams.set('client_id', appId)
+      authUrl.searchParams.set('app_id', appId) // Hidden Deriv Requirement
       authUrl.searchParams.set('redirect_uri', redirectUri)
       authUrl.searchParams.set('state', state)
       authUrl.searchParams.set('code_challenge', codeChallenge)
