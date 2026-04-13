@@ -12,6 +12,7 @@ import {
 } from "lucide-react"
 
 interface BotSettingsProps {
+  toolName?: string
   settings: any
   setSettings: (settings: any) => void
   disabled?: boolean
@@ -25,7 +26,7 @@ const MARKETS = [
   { value: "R_100", label: "Volatility 100 Index" },
 ]
 
-export function BotSettings({ settings, setSettings, disabled }: BotSettingsProps) {
+export function BotSettings({ toolName, settings, setSettings, disabled }: BotSettingsProps) {
   const update = (key: string, value: any) => {
     setSettings({ ...settings, [key]: value })
   }
@@ -46,28 +47,46 @@ export function BotSettings({ settings, setSettings, disabled }: BotSettingsProp
                 <ArrowRightLeft className="w-3 h-3" />
                 Execution Mode
             </Label>
-            <Tabs 
-                value={settings.tradeMode} 
-                onValueChange={(v) => update('tradeMode', v)}
-                className="w-full"
-            >
-                <TabsList className="grid w-full grid-cols-2 bg-white/5 border border-white/10 h-10 p-1">
-                    <TabsTrigger 
-                        value="NO_TOUCH" 
-                        disabled={disabled}
-                        className="data-[state=active]:bg-teal-500 data-[state=active]:text-black font-black text-[9px] tracking-widest uppercase"
-                    >
-                        No Touch
-                    </TabsTrigger>
-                    <TabsTrigger 
-                        value="TOUCH" 
-                        disabled={disabled}
-                        className="data-[state=active]:bg-teal-500 data-[state=active]:text-black font-black text-[9px] tracking-widest uppercase"
-                    >
-                        Touch
-                    </TabsTrigger>
-                </TabsList>
-            </Tabs>
+            {(toolName?.toLowerCase().includes('over') || toolName?.toLowerCase().includes('under')) ? (
+                <Tabs 
+                    value={settings.tradeMode === 'OVER_UNDER' ? 'OVER_UNDER' : 'OVER_UNDER'} 
+                    onValueChange={(v) => update('tradeMode', v)}
+                    className="w-full"
+                >
+                    <TabsList className="grid w-full grid-cols-1 bg-white/5 border border-white/10 h-10 p-1">
+                        <TabsTrigger 
+                            value="OVER_UNDER" 
+                            disabled={disabled}
+                            className="data-[state=active]:bg-teal-500 data-[state=active]:text-black font-black text-[9px] tracking-widest uppercase"
+                        >
+                            Over / Under 
+                        </TabsTrigger>
+                    </TabsList>
+                </Tabs>
+            ) : (
+                <Tabs 
+                    value={settings.tradeMode !== 'OVER_UNDER' ? settings.tradeMode : 'NO_TOUCH'} 
+                    onValueChange={(v) => update('tradeMode', v)}
+                    className="w-full"
+                >
+                    <TabsList className="grid w-full grid-cols-2 bg-white/5 border border-white/10 h-10 p-1">
+                        <TabsTrigger 
+                            value="NO_TOUCH" 
+                            disabled={disabled}
+                            className="data-[state=active]:bg-teal-500 data-[state=active]:text-black font-black text-[9px] tracking-widest uppercase"
+                        >
+                            No Touch
+                        </TabsTrigger>
+                        <TabsTrigger 
+                            value="TOUCH" 
+                            disabled={disabled}
+                            className="data-[state=active]:bg-teal-500 data-[state=active]:text-black font-black text-[9px] tracking-widest uppercase"
+                        >
+                            Touch
+                        </TabsTrigger>
+                    </TabsList>
+                </Tabs>
+            )}
         </div>
 
         {/* Strategic Tuning */}
@@ -161,9 +180,10 @@ export function BotSettings({ settings, setSettings, disabled }: BotSettingsProp
                 ))}
                 </SelectContent>
             </Select>
-            {/* Over/Under Barriers */}
+            {/* Over/Under Barriers - ONLY for Over/Under */}
+            {(toolName?.toLowerCase().includes('over') || toolName?.toLowerCase().includes('under') || settings.tradeMode === 'OVER_UNDER') && (
             <div className="mt-4 space-y-3">
-              <Label className="text-[10px] uppercase font-bold text-muted-foreground">Over Barrier</Label>
+              <Label className="text-[10px] uppercase font-bold text-muted-foreground">Over Target</Label>
               <Input
                 disabled={disabled}
                 type="number"
@@ -171,7 +191,7 @@ export function BotSettings({ settings, setSettings, disabled }: BotSettingsProp
                 onChange={(e) => update('overBarrier', Number(e.target.value))}
                 className="bg-white/5 border-white/10 h-8"
               />
-              <Label className="text-[10px] uppercase font-bold text-muted-foreground">Under Barrier</Label>
+              <Label className="text-[10px] uppercase font-bold text-muted-foreground">Under Target</Label>
               <Input
                 disabled={disabled}
                 type="number"
@@ -180,6 +200,7 @@ export function BotSettings({ settings, setSettings, disabled }: BotSettingsProp
                 className="bg-white/5 border-white/10 h-8"
               />
             </div>
+            )}
             {/* Recovery Strategy */}
             <div className="mt-4 space-y-3">
               <Label className="text-[10px] uppercase font-bold text-muted-foreground">Recovery Strategy</Label>

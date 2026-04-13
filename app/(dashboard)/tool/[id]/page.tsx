@@ -33,10 +33,16 @@ export default function SessionTraderPage() {
       
       if (!error && data) {
         setToolName(data.name)
+        const isOverUnder = data.name.toLowerCase().includes('over') || data.name.toLowerCase().includes('under')
+        if (isOverUnder && settings.tradeMode !== 'OVER_UNDER') {
+            setSettings(prev => ({ ...prev, tradeMode: 'OVER_UNDER' }))
+        } else if (!isOverUnder && settings.tradeMode === 'OVER_UNDER') {
+            setSettings(prev => ({ ...prev, tradeMode: 'NO_TOUCH' }))
+        }
       }
     }
     fetchTool()
-  }, [toolId])
+  }, [toolId, setSettings, settings.tradeMode])
 
   return (
     <div className="flex flex-col gap-6 min-h-full pb-10">
@@ -57,6 +63,7 @@ export default function SessionTraderPage() {
         {/* Left Column - Configuration */}
         <div className="lg:col-span-3">
             <BotSettings 
+                toolName={toolName}
                 settings={settings} 
                 setSettings={setSettings} 
                 disabled={bot.state !== 'IDLE' && bot.state !== 'STOPPED'} 

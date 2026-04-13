@@ -13,7 +13,9 @@ import {
   Settings, 
   Circle,
   ChevronRight,
-  Menu
+  Menu,
+  Users,
+  LineChart
 } from "lucide-react"
 import {
   Sidebar,
@@ -71,6 +73,8 @@ export function AppSidebar() {
   const mainNav = [
     { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
     { title: "Live Activity", href: "/activity", icon: Activity },
+    { title: "Community Hub", href: "/community", icon: Users },
+    { title: "Charting Portal", href: "/trading", icon: LineChart },
   ]
 
   const insightNav = [
