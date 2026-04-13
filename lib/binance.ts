@@ -45,7 +45,7 @@ export async function getHistoricalData(symbol: string, interval = "1d", limit =
 
     const data = await response.json()
 
-    return data.map((kline) => ({
+    return data.map((kline: any[]) => ({
       openTime: kline[0],
       open: kline[1],
       high: kline[2],

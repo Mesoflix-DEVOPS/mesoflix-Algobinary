@@ -65,7 +65,7 @@ export function Navigation() {
   )
 }
 
-function NavButton({ icon, label, onClick, active }) {
+function NavButton({ icon, label, onClick, active }: { icon: React.ReactNode, label: string, onClick: () => void, active: boolean }) {
   return (
     <Button
       variant="ghost"

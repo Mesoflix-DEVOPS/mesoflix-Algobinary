@@ -29,7 +29,7 @@ export async function getAiStrategyAdvice(marketCondition: string, currentStrate
     })
 
     return text
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error getting AI strategy advice:", error)
     if (error.message?.includes("API key")) {
       return "OpenAI API key is missing or invalid. Please add a valid OPENAI_API_KEY to your environment variables."
@@ -62,7 +62,7 @@ export async function analyzeBacktestResults(results: string): Promise<string> {
     })
 
     return text
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error analyzing backtest results:", error)
     if (error.message?.includes("API key")) {
       return "OpenAI API key is missing or invalid. Please add a valid OPENAI_API_KEY to your environment variables."

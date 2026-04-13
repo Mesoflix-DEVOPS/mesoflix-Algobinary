@@ -268,6 +268,7 @@ export function useTradeBot(settings: TradeSettings) {
         currency: 'USD',
         amount: settings.stake,
         duration: 2,
+        duration_unit: 'm',
         symbol: settings.market,
         barrier: barrier
       })
