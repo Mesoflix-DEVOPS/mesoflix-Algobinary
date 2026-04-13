@@ -21,7 +21,9 @@ import {
   Globe,
   Loader2,
   MoreVertical,
-  Activity
+  Activity,
+  Trophy,
+  Shield
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -157,6 +159,7 @@ export default function AdminDashboard() {
             {[
                 { id: "overview", label: "Dashboard", icon: BarChart3 },
                 { id: "users", label: "User Control", icon: Users },
+                { id: "leaderboard", label: "Leaderboard", icon: Trophy },
                 { id: "news", label: "News & Alerts", icon: Newspaper },
                 { id: "broadcast", label: "System Broadcast", icon: MessageSquare },
                 { id: "settings", label: "Security", icon: Settings },
@@ -548,6 +551,69 @@ export default function AdminDashboard() {
                                 </div>
                             </div>
                         ))}
+                    </div>
+                </Card>
+            </div>
+        )}
+        
+        {activeTab === "leaderboard" && (
+            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <Card className="bg-zinc-950 border-white/5 rounded-3xl p-8 shadow-2xl">
+                    <div className="flex items-center justify-between mb-8">
+                        <div>
+                            <CardTitle className="text-xl font-black uppercase tracking-tighter">Leaderboard Management</CardTitle>
+                            <CardDescription className="text-gray-500">View and sync global trader rankings</CardDescription>
+                        </div>
+                        <Button 
+                            className="bg-teal-600 hover:bg-teal-500 text-white font-black uppercase tracking-widest px-6 rounded-xl border-none"
+                            onClick={async () => {
+                                const res = await fetch("/api/admin/leaderboard/sync", { method: "POST" });
+                                if (res.ok) alert("Leaderboard synchronized successfully.");
+                            }}
+                        >
+                            Sync Rankings
+                        </Button>
+                    </div>
+                    <div className="py-20 text-center opacity-20 border border-dashed border-white/10 rounded-2xl">
+                        <Trophy className="w-12 h-12 mx-auto mb-4" />
+                        <p className="text-xs font-black uppercase tracking-widest mt-2">Rankings engine active</p>
+                    </div>
+                </Card>
+            </div>
+        )}
+
+        {activeTab === "settings" && (
+            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <Card className="bg-zinc-950 border-white/5 rounded-3xl p-8 shadow-2xl">
+                    <CardHeader className="p-0 mb-8">
+                        <CardTitle className="text-xl font-black uppercase tracking-tighter flex items-center gap-3">
+                            <Shield className="w-6 h-6 text-teal-500" /> Platform Security
+                        </CardTitle>
+                        <CardDescription className="text-gray-500">Configure global application security</CardDescription>
+                    </CardHeader>
+                    <div className="space-y-6">
+                        <div className="p-6 rounded-xl bg-white/5 border border-white/5">
+                            <h4 className="font-bold text-white uppercase tracking-widest text-sm mb-2">Row Level Security (RLS) Policies</h4>
+                            <p className="text-xs text-gray-400 mb-6">Database policies and schema lockdown configuration for users, trades, news, and community.</p>
+                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                                <div className="bg-zinc-950 border border-white/10 p-4 rounded-xl flex flex-col items-center justify-center text-center">
+                                    <Badge className="bg-green-500/10 text-green-500 hover:bg-green-500/20 text-[10px] uppercase font-black tracking-widest border-none">Users Secured</Badge>
+                                    <span className="text-[9px] text-gray-500 mt-2">System R/W Only</span>
+                                </div>
+                                <div className="bg-zinc-950 border border-white/10 p-4 rounded-xl flex flex-col items-center justify-center text-center">
+                                    <Badge className="bg-green-500/10 text-green-500 hover:bg-green-500/20 text-[10px] uppercase font-black tracking-widest border-none">Trades Secured</Badge>
+                                    <span className="text-[9px] text-gray-500 mt-2">System R/W Only</span>
+                                </div>
+                                <div className="bg-zinc-950 border border-white/10 p-4 rounded-xl flex flex-col items-center justify-center text-center">
+                                    <Badge className="bg-green-500/10 text-green-500 hover:bg-green-500/20 text-[10px] uppercase font-black tracking-widest border-none">News Secured</Badge>
+                                    <span className="text-[9px] text-gray-500 mt-2">Public Select Array</span>
+                                </div>
+                                <div className="bg-zinc-950 border border-white/10 p-4 rounded-xl flex flex-col items-center justify-center text-center">
+                                    <Badge className="bg-green-500/10 text-green-500 hover:bg-green-500/20 text-[10px] uppercase font-black tracking-widest border-none">Chat Secured</Badge>
+                                    <span className="text-[9px] text-gray-500 mt-2">Auth Required</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </Card>
             </div>
