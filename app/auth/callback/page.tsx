@@ -217,6 +217,31 @@ function AuthCallbackContent() {
         // 4. SYNCING (Save to Supabase & Register Session)
         const userData = authResponse.authorize
 
+        // For V2 fetch the real user profile from OAuth userinfo endpoint
+        let userProfile: any = {
+            email: userData.email,
+            fullname: userData.fullname,
+            loginid: userData.loginid,
+            currency: userData.currency || "USD",
+            balance: userData.balance || 0
+        }
+
+        if (authFlow === "new_v2") {
+            try {
+                const profileRes = await fetch(`${derivConfig.OAUTH_URL}/userinfo`, {
+                    headers: { "Authorization": `Bearer ${primaryToken}` }
+                })
+                if (profileRes.ok) {
+                    const profile = await profileRes.json()
+                    console.log("[Callback] V2 userinfo:", profile)
+                    userProfile.email = profile.email || userProfile.email
+                    userProfile.fullname = profile.name || profile.given_name + (profile.family_name ? " " + profile.family_name : "") || userProfile.fullname
+                }
+            } catch (e) {
+                console.warn("[Callback] Could not fetch userinfo:", e)
+            }
+        }
+
         // For V2 the real account was already fetched and set; update any UNKNOWN placeholder
         if (authFlow === "new_v2" && accountList.length === 1 && accountList[0].account === "UNKNOWN_V2") {
             accountList[0].account = userData.loginid
@@ -224,23 +249,28 @@ function AuthCallbackContent() {
         }
 
         const primaryAccount = accountList[0] || { account: userData.loginid }
-
         const expiryDate = tokenExpiry > 0 ? new Date(Date.now() + tokenExpiry * 1000).toISOString() : null
 
-        const { error: dbError } = await supabase.from("users").upsert({
-          email: userData.email,
-          username: userData.fullname || userData.loginid,
-          full_name: userData.fullname,
+        // Upsert core fields; deriv_refresh_token requires the migration in 03_auth_flow.sql to be run first.
+        const upsertPayload: any = {
+          email: userProfile.email,
+          username: userProfile.fullname || userData.loginid,
+          full_name: userProfile.fullname,
           deriv_account_id: userData.loginid,
           deriv_token: primaryToken,
-          deriv_refresh_token: refreshToken || null,
-          deriv_access_token_expires_at: expiryDate,
-          balance: userData.balance || 0,
-          auth_flow: authFlow // Save the specific flow used
-        }, { onConflict: 'email' })
+          balance: userProfile.balance || 0,
+          auth_flow: authFlow
+        }
+
+        // Only include refresh token fields if values are present (migration may not have run yet)
+        if (refreshToken) upsertPayload.deriv_refresh_token = refreshToken
+        if (expiryDate) upsertPayload.deriv_access_token_expires_at = expiryDate
+
+        const { error: dbError } = await supabase.from("users").upsert(upsertPayload, { onConflict: 'email' })
 
         if (dbError) {
            console.error("Supabase sync error:", dbError)
+           // Non-fatal — session data is already in localStorage, redirect can proceed
         }
 
         // --- NEW: SESSION REGISTRATION ---
@@ -264,7 +294,15 @@ function AuthCallbackContent() {
         // Store session in localStorage and Cookies (for Middleware)
         localStorage.setItem("derivex_token", primaryToken)
         localStorage.setItem("derivex_acct", primaryAccount.account)
-        localStorage.setItem("derivex_user", JSON.stringify(userData))
+        // Store enriched user profile (includes real name/email from userinfo for V2)
+        localStorage.setItem("derivex_user", JSON.stringify({
+            ...userData,
+            email: userProfile.email,
+            fullname: userProfile.fullname,
+            loginid: userData.loginid,
+            currency: primaryAccount.currency || userData.currency || "USD",
+            balance: userProfile.balance
+        }))
         localStorage.setItem("derivex_accounts", JSON.stringify(accountList))
         localStorage.setItem("derivex_auth_flow", authFlow)
         
