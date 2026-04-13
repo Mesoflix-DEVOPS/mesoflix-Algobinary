@@ -75,7 +75,7 @@ export function AppSidebar() {
     { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
     { title: "Live Activity", href: "/activity", icon: Activity },
     { title: "Community Hub", href: "/community", icon: Users },
-    { title: "Charting Portal", href: "/trading", icon: LineChart },
+    { title: "Chart", href: "/trading", icon: LineChart },
   ]
 
   const insightNav = [

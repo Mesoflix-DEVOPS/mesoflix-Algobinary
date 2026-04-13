@@ -2,9 +2,10 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import dynamic from "next/dynamic"
 import { Button } from "@/components/ui/button"
-import { Users, Trophy, TrendingUp, Globe, MessageSquare, Loader2 } from "lucide-react"
+import { Users, Trophy, Globe, MessageSquare, Loader2, ArrowLeft } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
@@ -56,17 +57,13 @@ export default function CommunityPage() {
     checkUserIdentity()
   }, [router])
 
+  // Anonymous, realistic community leaderboard (mirrors the main leaderboard mock data)
   const leaderboard = [
-    { rank: 1, name: "Alexander T.", profit: "+$48,250", winRate: "74%", trades: 456, medal: "🥇" },
-    { rank: 2, name: "Maria S.", profit: "+$42,890", winRate: "71%", trades: 398, medal: "🥈" },
-    { rank: 3, name: "John D.", profit: "+$39,450", winRate: "69%", trades: 367, medal: "🥉" },
-    { rank: 4, name: "Lisa K.", profit: "+$35,670", winRate: "67%", trades: 342, medal: "4" },
-    { rank: 5, name: "Robert M.", profit: "+$33,210", winRate: "66%", trades: 320, medal: "5" },
-    { rank: 6, name: "Emma W.", profit: "+$31,540", winRate: "65%", trades: 298, medal: "6" },
-    { rank: 7, name: "David H.", profit: "+$28,790", winRate: "63%", trades: 275, medal: "7" },
-    { rank: 8, name: "Sarah C.", profit: "+$26,340", winRate: "62%", trades: 254, medal: "8" },
-    { rank: 9, name: "Michael P.", profit: "+$24,560", winRate: "61%", trades: 235, medal: "9" },
-    { rank: 10, name: "Jennifer R.", profit: "+$22,450", winRate: "60%", trades: 218, medal: "10" },
+    { rank: 1, maskedId: "VLTX3*****", profit: "+$247.80", winRate: "74%", trades: 38, medal: "🥇" },
+    { rank: 2, maskedId: "CR09X*****", profit: "+$183.50", winRate: "68%", trades: 29, medal: "🥈" },
+    { rank: 3, maskedId: "BRTX1*****", profit: "+$149.20", winRate: "63%", trades: 24, medal: "🥉" },
+    { rank: 4, maskedId: "MX42K*****", profit: "+$118.60", winRate: "59%", trades: 19, medal: "4" },
+    { rank: 5, maskedId: "ZP77R*****", profit: "+$94.35",  winRate: "56%", trades: 15, medal: "5" },
   ]
 
   return (
@@ -78,6 +75,10 @@ export default function CommunityPage() {
       <div className="absolute inset-0 z-20 flex flex-col p-4 md:p-8 overflow-y-auto">
         <div className="w-full max-w-7xl mx-auto mb-8 flex flex-col md:flex-row md:items-end justify-between gap-6 pointer-events-none">
           <div className="pointer-events-auto">
+            {/* Back to dashboard */}
+            <Link href="/dashboard" className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-gray-500 hover:text-white border border-white/10 hover:border-white/20 px-3 py-1.5 rounded-xl mb-4 transition-all">
+              <ArrowLeft className="w-3 h-3" /> Back to Trading Panel
+            </Link>
             <div className="mb-4 inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-teal-500/10 border border-teal-500/20">
               <Users className="h-6 w-6 text-teal-500" />
             </div>
@@ -136,7 +137,7 @@ export default function CommunityPage() {
                         <div className="flex items-center gap-4 mb-8">
                             <div className="text-3xl">{trader.medal}</div>
                             <div>
-                                <h3 className="text-2xl font-black text-white uppercase tracking-tighter leading-tight">{trader.name}</h3>
+                                <h3 className="text-xl font-black text-white uppercase tracking-tighter leading-tight font-mono">{trader.maskedId}</h3>
                                 <Badge className="bg-teal-500/10 text-teal-500 border-none text-[8px] h-4">ELITE TRADER</Badge>
                             </div>
                         </div>
@@ -181,9 +182,9 @@ export default function CommunityPage() {
                                     <td className="px-8 py-5">
                                         <div className="flex items-center gap-3">
                                             <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center font-black text-[10px] uppercase text-gray-500">
-                                                {trader.name[0]}
+                                                {trader.maskedId.slice(0, 2)}
                                             </div>
-                                            <span className="text-sm font-bold text-white uppercase">{trader.name}</span>
+                                            <span className="text-sm font-bold text-white uppercase font-mono tracking-tight">{trader.maskedId}</span>
                                         </div>
                                     </td>
                                     <td className="px-8 py-5 text-right font-black text-teal-400 text-sm">{trader.profit}</td>

@@ -1,67 +1,67 @@
 "use client"
 
 import * as React from "react"
+import Link from "next/link"
 import { 
   Trophy, 
   TrendingUp,
   Medal,
   Loader2,
-  ShieldCheck
+  ShieldCheck,
+  ArrowLeft
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { supabase } from "@/lib/db"
 import { cn } from "@/lib/utils"
 
-// ─── MOCK TOP 3 (always shown, privacy-safe) ────────────────────────────────
+// ─── MOCK TOP 3 — realistic small profits, not millions ─────────────────────
 const MOCK_LEGENDS = [
   {
     id: "mock-1",
     rank: 1,
-    maskedId: "VLTX3***",
+    maskedId: "VLTX3*****",
     label: "🥇",
-    growth: 84.2,
+    netProfit: 247.80,
     winRate: 74,
-    trades: 456,
-    streak: "+12",
+    trades: 38,
     isMock: true,
   },
   {
-    id: "mock-2", 
+    id: "mock-2",
     rank: 2,
-    maskedId: "CR09X***",
+    maskedId: "CR09X*****",
     label: "🥈",
-    growth: 71.5,
+    netProfit: 183.50,
     winRate: 68,
-    trades: 389,
-    streak: "+8",
+    trades: 29,
     isMock: true,
   },
   {
     id: "mock-3",
     rank: 3,
-    maskedId: "BRTX1***",
+    maskedId: "BRTX1*****",
     label: "🥉",
-    growth: 63.8,
+    netProfit: 149.20,
     winRate: 63,
-    trades: 312,
-    streak: "+5",
+    trades: 24,
     isMock: true,
   },
 ]
 
 function maskId(id: string): string {
   if (!id) return "ANON****"
-  // Take first 5 chars, mask the rest
   const visible = id.slice(0, 5).toUpperCase()
   return `${visible}*****`
 }
 
-function calcGrowth(winRate: number, trades: number): number {
-  // Show a percentage growth score, not real balance
-  return Math.min(99.9, Number(((winRate * 0.6) + (Math.min(trades, 500) / 500) * 40).toFixed(1)))
+function calcNetProfit(wins: number, losses: number, stake = 5): number {
+  // Realistic small profit: wins earn 85% payout, losses lose stake
+  const gross = wins * (stake * 0.85) - losses * stake
+  return Math.max(0, Number(gross.toFixed(2)))
 }
 
 export default function LeaderboardPage() {
@@ -70,7 +70,6 @@ export default function LeaderboardPage() {
 
   React.useEffect(() => {
     async function fetchRealTop() {
-      // Fetch top 2 real users by win_rate + total_trades (no balance exposed)
       const { data } = await supabase
         .from("users")
         .select("id, deriv_account_id, total_trades, win_rate, total_wins, total_losses")
@@ -84,10 +83,9 @@ export default function LeaderboardPage() {
             rank: 4 + i,
             maskedId: maskId(u.deriv_account_id || u.id),
             label: `${4 + i}`,
-            growth: calcGrowth(Number(u.win_rate), Number(u.total_trades)),
+            netProfit: calcNetProfit(Number(u.total_wins) || 0, Number(u.total_losses) || 0),
             winRate: Number(u.win_rate) || 0,
             trades: Number(u.total_trades) || 0,
-            streak: "+0",
             isMock: false,
           }))
         )
@@ -105,12 +103,19 @@ export default function LeaderboardPage() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div className="space-y-2">
+          <div className="flex items-center gap-3 mb-2">
+            <Link href="/dashboard">
+              <Button variant="ghost" size="sm" className="text-gray-500 hover:text-white font-black uppercase tracking-widest text-[10px] h-8 px-3 border border-white/10 hover:border-white/20">
+                <ArrowLeft className="w-3.5 h-3.5 mr-1" /> Trading Panel
+              </Button>
+            </Link>
+          </div>
           <h1 className="text-3xl font-black text-white tracking-tighter uppercase flex items-center gap-3">
             <Trophy className="w-8 h-8 text-teal-400" />
             Global Hall of Fame
           </h1>
           <p className="text-gray-500 font-medium text-sm">
-            Performance rankings based on win rate & trade volume. Identities are always anonymized.
+            Performance rankings based on net profit. Identities are always anonymized.
           </p>
         </div>
         <div className="flex items-center gap-2 text-[9px] font-black uppercase text-gray-600 tracking-widest bg-white/5 border border-white/10 px-4 py-2 rounded-2xl">
@@ -153,24 +158,25 @@ export default function LeaderboardPage() {
                 Rank #{entry.rank}
               </Badge>
 
-              {/* Growth Progress Bar */}
+              {/* Net Profit */}
               <div className="w-full space-y-2 mb-4">
                 <div className="flex justify-between items-center">
-                  <span className="text-[9px] font-black uppercase text-gray-500 tracking-widest">Strategy Growth</span>
+                  <span className="text-[9px] font-black uppercase text-gray-500 tracking-widest">Net Profit</span>
                   <span className={cn(
                     "text-sm font-black",
                     i === 0 ? "text-teal-400" : "text-gray-300"
                   )}>
-                    +{entry.growth}%
+                    +${entry.netProfit.toFixed(2)}
                   </span>
                 </div>
+                {/* Progress bar: relative to #1 */}
                 <div className="h-2 bg-white/5 rounded-full overflow-hidden">
                   <div
                     className={cn(
                       "h-full rounded-full transition-all duration-1000",
                       i === 0 ? "bg-teal-500" : i === 1 ? "bg-gray-400" : "bg-amber-600"
                     )}
-                    style={{ width: `${entry.growth}%` }}
+                    style={{ width: `${(entry.netProfit / MOCK_LEGENDS[0].netProfit) * 100}%` }}
                   />
                 </div>
               </div>
@@ -216,7 +222,7 @@ export default function LeaderboardPage() {
                     <TableRow className="border-white/5 hover:bg-transparent">
                       <TableHead className="w-[70px] text-[10px] uppercase font-black text-gray-500">#</TableHead>
                       <TableHead className="text-[10px] uppercase font-black text-gray-500">Trader ID</TableHead>
-                      <TableHead className="text-[10px] uppercase font-black text-gray-500">Strategy Growth</TableHead>
+                      <TableHead className="text-[10px] uppercase font-black text-gray-500">Net Profit</TableHead>
                       <TableHead className="text-[10px] uppercase font-black text-gray-500">Trades</TableHead>
                       <TableHead className="text-[10px] uppercase font-black text-gray-500 text-right">Win Rate</TableHead>
                     </TableRow>
@@ -261,16 +267,16 @@ export default function LeaderboardPage() {
                             </div>
                           </TableCell>
 
-                          {/* Growth Progress Bar */}
+                          {/* Net Profit bar */}
                           <TableCell>
                             <div className="flex items-center gap-3">
                               <div className="w-20 h-1.5 bg-white/5 rounded-full overflow-hidden">
                                 <div
                                   className="h-full bg-teal-500 rounded-full"
-                                  style={{ width: `${entry.growth}%` }}
+                                  style={{ width: `${(entry.netProfit / MOCK_LEGENDS[0].netProfit) * 100}%` }}
                                 />
                               </div>
-                              <span className="text-teal-400 font-black text-xs">+{entry.growth}%</span>
+                              <span className="text-green-400 font-black text-xs">+${Number(entry.netProfit || 0).toFixed(2)}</span>
                             </div>
                           </TableCell>
 

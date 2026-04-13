@@ -81,9 +81,10 @@ export function ChatRoom({ currentUser }: ChatRoomProps) {
 
     initChat()
 
-    // 3. Subscribe to Realtime
+    // Real-time: subscribe to new messages
+    const channelName = `community_chat_${Date.now()}`
     const channel = supabase
-      .channel('global_community')
+      .channel(channelName)
       .on('postgres_changes', { 
         event: 'INSERT', 
         schema: 'public', 
@@ -91,7 +92,13 @@ export function ChatRoom({ currentUser }: ChatRoomProps) {
       }, (payload) => {
         setMessages(prev => [...prev.slice(-49), payload.new as CommunityMessage])
       })
-      .subscribe()
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('[ChatRoom] Realtime connected — live messages active')
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('[ChatRoom] Realtime channel error — check RLS policies')
+        }
+      })
 
     return () => {
       supabase.removeChannel(channel)

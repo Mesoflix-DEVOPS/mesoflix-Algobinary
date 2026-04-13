@@ -12,8 +12,15 @@ const MainScene = dynamic(() => import("@/components/main-scene").then(mod => mo
 export default function Home() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
 
   useEffect(() => {
+    // Check if user is already logged in
+    const acct = localStorage.getItem("derivex_acct")
+    if (acct) {
+      setIsLoggedIn(true)
+    }
+
     // Simulate loading assets
     const timer = setTimeout(() => {
       setLoading(false)
@@ -49,19 +56,30 @@ export default function Home() {
                 Choose a tool, not a strategy. Select from proven automated trading solutions and start earning instantly.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center pointer-events-auto">
-                <Button
-                  className="bg-teal-500 hover:bg-teal-600 text-black font-bold px-8 py-6 text-lg rounded-xl shadow-[0_0_20px_rgba(20,184,166,0.5)] transition-all hover:scale-105"
-                  onClick={() => router.push("/login")}
-                >
-                  Login with Deriv
-                </Button>
-                <Button
-                  variant="outline"
-                  className="border-teal-500 text-teal-500 hover:bg-teal-900/20 px-8 py-6 text-lg rounded-xl transition-all"
-                  onClick={() => router.push("/login")}
-                >
-                  Get Started
-                </Button>
+                {isLoggedIn ? (
+                  <Button
+                    className="bg-teal-500 hover:bg-teal-600 text-black font-bold px-8 py-6 text-lg rounded-xl shadow-[0_0_20px_rgba(20,184,166,0.5)] transition-all hover:scale-105"
+                    onClick={() => router.push("/dashboard")}
+                  >
+                    Go to Dashboard
+                  </Button>
+                ) : (
+                  <>
+                    <Button
+                      className="bg-teal-500 hover:bg-teal-600 text-black font-bold px-8 py-6 text-lg rounded-xl shadow-[0_0_20px_rgba(20,184,166,0.5)] transition-all hover:scale-105"
+                      onClick={() => router.push("/login")}
+                    >
+                      Login with Deriv
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="border-teal-500 text-teal-500 hover:bg-teal-900/20 px-8 py-6 text-lg rounded-xl transition-all"
+                      onClick={() => router.push("/login")}
+                    >
+                      Get Started
+                    </Button>
+                  </>
+                )}
               </div>
             </div>
 
