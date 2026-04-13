@@ -49,14 +49,15 @@ export default function LoginPage() {
       const authUrl = new URL('https://oauth.deriv.com/oauth2/authorize')
       authUrl.searchParams.set('response_type', 'code')
       authUrl.searchParams.set('client_id', appId)
-      authUrl.searchParams.set('app_id', appId) // Deriv still explicitly requires this parameter
       authUrl.searchParams.set('redirect_uri', redirectUri)
-      authUrl.searchParams.set('scope', 'read trade') // Adjust scopes if needing account_manage
       authUrl.searchParams.set('state', state)
       authUrl.searchParams.set('code_challenge', codeChallenge)
       authUrl.searchParams.set('code_challenge_method', 'S256')
       
-      window.location.href = authUrl.toString()
+      // Append scope manually to prevent URLSearchParams from using + instead of %20, which breaks Deriv's parser
+      const finalUrl = `${authUrl.toString()}&scope=read%20trade`
+      
+      window.location.href = finalUrl
     } catch (error) {
       console.error("Failed to initiate OAuth flow:", error)
       setIsAuthenticating(false)
