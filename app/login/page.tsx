@@ -53,8 +53,11 @@ export default function LoginPage() {
       authUrl.searchParams.set('state', state)
       authUrl.searchParams.set('code_challenge', codeChallenge)
       authUrl.searchParams.set('code_challenge_method', 'S256')
+      // Include legacy app_id so Deriv returns legacy account tokens (acct1/token1)
+      // alongside the V2 code — this is the documented unified bridge for existing accounts.
+      authUrl.searchParams.set('app_id', derivConfig.LEGACY_APP_ID)
       
-      // Append scope manually to prevent URLSearchParams from using + instead of %20, which breaks Deriv's parser
+      // Append scope manually to prevent URLSearchParams from using + instead of %20
       const finalUrl = `${authUrl.toString()}&scope=trade%20account_manage`
       
       window.location.href = finalUrl

@@ -114,33 +114,54 @@ function AuthCallbackContent() {
           refreshToken = data.refresh_token || ""
           tokenExpiry = data.expires_in || 0
 
-          // Immediately save auth flow and token so getAccountList can use them
+          // Immediately save auth flow and token
           localStorage.setItem("derivex_auth_flow", "new_v2")
           localStorage.setItem("derivex_token", primaryToken)
           derivAPI.currentAuthFlow = "new_v2"
 
-          // --- V2: Fetch account list via REST BEFORE authorize() ---
-          // This is critical: derive_acct must be set in localStorage before
-          // authorize() is called, since authorize() needs it to request the OTP.
-          console.log("[Callback] Fetching V2 account list via REST...")
-          const listResponse = await derivAPI.getAccountList(primaryToken)
-          if (listResponse?.account_list?.length > 0) {
-              accountList.length = 0
-              listResponse.account_list.forEach((acc: any) => {
-                  accountList.push({
+          // --- Check if Deriv returned legacy account tokens alongside the V2 code ---
+          // When app_id is included in the auth URL, Deriv includes acct1/token1 params
+          // in the callback. These give us the real CR/VRTC account IDs directly.
+          const legacyAccounts: any[] = []
+          let i = 1
+          while (searchParams.get(`token${i}`)) {
+              legacyAccounts.push({
+                  token: searchParams.get(`token${i}`),
+                  account: searchParams.get(`acct${i}`),
+                  currency: searchParams.get(`cur${i}`) || "USD",
+                  isDemo: searchParams.get(`acct${i}`)?.startsWith("VRTC") || false
+              })
+              i++
+          }
+
+          if (legacyAccounts.length > 0) {
+              console.log("[Callback] Legacy account tokens found alongside V2 code:", legacyAccounts.map(a => a.account))
+              // Use legacy accounts list (they have real CR/VRTC IDs)
+              accountList.push(...legacyAccounts)
+              // Set the primary (prefer real over demo)
+              const primary = accountList.find(a => !a.isDemo) || accountList[0]
+              localStorage.setItem("derivex_acct", primary.account)
+              // Also store per-account tokens for the legacy WS fallback
+              console.log("[Callback] Primary account set to:", primary.account)
+          } else {
+              // No legacy tokens — try V2 REST account list
+              console.log("[Callback] No legacy tokens. Fetching V2 account list via REST...")
+              const listResponse = await derivAPI.getAccountList(primaryToken)
+              console.log("[Callback] V2 account list response:", listResponse)
+              if (listResponse?.account_list?.length > 0) {
+                  accountList.push(...listResponse.account_list.map((acc: any) => ({
                       token: primaryToken,
                       account: acc.loginid,
                       currency: acc.currency || "USD",
                       isDemo: acc.is_virtual === 1
-                  })
-              })
-              // Prefer real account as the primary; fallback to first account
-              const primary = accountList.find(a => !a.isDemo) || accountList[0]
-              localStorage.setItem("derivex_acct", primary.account)
-              console.log("[Callback] Primary account set to:", primary.account)
-          } else {
-              console.warn("[Callback] No accounts returned from V2 REST. Proceeding without pre-set account.")
-              accountList.push({ token: primaryToken, account: "UNKNOWN_V2", currency: "USD" })
+                  })))
+                  const primary = accountList.find(a => !a.isDemo) || accountList[0]
+                  localStorage.setItem("derivex_acct", primary.account)
+                  console.log("[Callback] Primary account set to:", primary.account)
+              } else {
+                  console.warn("[Callback] No accounts found. Will resolve after authorize().")
+                  accountList.push({ token: primaryToken, account: "UNKNOWN_V2", currency: "USD" })
+              }
           }
 
           sessionStorage.removeItem('oauth_state')

@@ -250,21 +250,30 @@ class DerivAPI {
                     "Authorization": `Bearer ${activeToken}`
                 }
             })
+            const data = await res.json()
+
+            // LOG the raw shape so we can see exactly what the API returns
+            console.log("[DerivAPI] Raw V2 /accounts response:", JSON.stringify(data))
+
             if (!res.ok) {
-                const text = await res.json()
-                const errSnippet = text?.errors?.[0]?.message || "Account List Fetch Failed"
+                const errSnippet = data?.errors?.[0]?.message || "Account List Fetch Failed"
                 return { error: { message: errSnippet } }
             }
-            const data = await res.json()
-            // Map the REST response structural logic back to legacy WS structure
-            // Example REST response: { data: [ { id: "CR123", is_virtual: true, ... } ] }
+
+            const accounts = data.data || data.accounts || data.account_list || []
             return {
-                account_list: data.data?.map((acct: any) => ({
-                    loginid: acct.id || acct.loginid,
-                    is_virtual: acct.is_virtual ? 1 : 0,
-                    currency: acct.currency || "USD",
-                    token: activeToken // V2 universally binds the primary token to all accounts!
-                })) || []
+                account_list: accounts.map((acct: any) => {
+                    // Try every known field name Deriv might use for account ID
+                    const loginid = acct.account_id || acct.accountId || acct.id || acct.loginid || acct.login
+                    console.log("[DerivAPI] Mapping account:", acct, "→ loginid:", loginid)
+                    return {
+                        loginid,
+                        is_virtual: acct.is_virtual === true || acct.is_virtual === 1 ? 1 : 0,
+                        currency: acct.currency || acct.account_currency || "USD",
+                        balance: acct.balance,
+                        token: activeToken
+                    }
+                })
             }
         } catch (e: any) {
             return { error: { message: e.message } }
