@@ -189,6 +189,7 @@ function AuthCallbackContent() {
         setStep(authFlow === "new_v2" ? "AUTHORIZING" : "CONNECTING")
 
         // 2. CONNECTING — set auth flow before connect() so it picks correct WS URL
+        localStorage.setItem("derivex_auth_flow", authFlow)
         derivAPI.currentAuthFlow = authFlow
         try {
             await derivAPI.connect()

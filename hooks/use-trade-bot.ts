@@ -6,7 +6,7 @@ import { supabase } from '@/lib/db'
 
 
 export type BotState = 'IDLE' | 'SCANNING' | 'IN_TRADE' | 'COOLDOWN' | 'STOPPED'
-export type TradeMode = 'TOUCH' | 'NO_TOUCH'
+export type TradeMode = 'TOUCH' | 'NO_TOUCH' | 'OVER_UNDER'
 
 interface TradeSettings {
   stake: number
@@ -18,6 +18,10 @@ interface TradeSettings {
   market: string
   autoSwitch: boolean
   tradeMode: TradeMode
+  ouSide?: 'OVER' | 'UNDER'
+  ouTarget?: number
+  martingaleMultiplier: number
+  martingaleLevel: number
   kMultiplier: number
   volatilityThreshold: number
   activeToken?: string
@@ -77,6 +81,8 @@ export function useTradeBot(settings: TradeSettings) {
   const lastCooldownCount = useRef<number>(0)
   const sessionId = useRef<string | null>(null)
   const isDemo = settings.activeAcct?.startsWith('VRTC')
+  const consecutiveLosses = useRef<number>(0)
+  const currentMultiplier = useRef<number>(1)
 
 
   const addLog = useCallback(async (action: string, details: string, level: 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR' = 'INFO') => {
@@ -225,6 +231,8 @@ export function useTradeBot(settings: TradeSettings) {
             }
         }
 
+        consecutiveLosses.current = 0
+        currentMultiplier.current = 1
         setState('SCANNING')
         stateRef.current = 'SCANNING'
     } catch (err: any) {
@@ -258,17 +266,29 @@ export function useTradeBot(settings: TradeSettings) {
     if (stateRef.current !== 'SCANNING' || !livePrice) return
     
     try {
-      const type = settings.tradeMode === 'TOUCH' ? 'ONETOUCH' : 'NOTOUCH'
-      const barrier = `+${computedBarrier.toFixed(2)}`
-      
-      addLog('ENTRY', `Strategy Met: Placing 2-min ${settings.tradeMode} (Vol: ${metrics.volatility}, Trend: ${metrics.trendDirection})`, 'SUCCESS')
+      let type: string
+      let barrier: string | undefined = undefined
+      let duration = 2
+      let duration_unit: 'm' | 't' = 'm'
+
+      if (settings.tradeMode === 'OVER_UNDER') {
+          type = settings.ouSide === 'UNDER' ? 'DIGITUNDER' : 'DIGITOVER'
+          barrier = String(settings.ouTarget || (settings.ouSide === 'UNDER' ? 8 : 1))
+          duration = 1
+          duration_unit = 't'
+          addLog('ENTRY', `Digit Strategy: Placing 1-tick ${settings.ouSide} ${barrier} (Stake: ${(settings.stake * currentMultiplier.current).toFixed(2)})`, 'SUCCESS')
+      } else {
+          type = settings.tradeMode === 'TOUCH' ? 'ONETOUCH' : 'NOTOUCH'
+          barrier = `+${computedBarrier.toFixed(2)}`
+          addLog('ENTRY', `Market Strategy: Placing 2-min ${settings.tradeMode} (Vol: ${metrics.volatility}, Trend: ${metrics.trendDirection})`, 'SUCCESS')
+      }
       
       const resp = await derivAPI.buyContract({
         contractType: type,
         currency: 'USD',
-        amount: settings.stake,
-        duration: 2,
-        duration_unit: 'm',
+        amount: Number((settings.stake * currentMultiplier.current).toFixed(2)),
+        duration: duration,
+        duration_unit: duration_unit as any,
         symbol: settings.market,
         barrier: barrier
       })
@@ -324,6 +344,23 @@ export function useTradeBot(settings: TradeSettings) {
                   const newWins = isWin ? prev.wins + 1 : prev.wins
                   const newLosses = isWin ? prev.losses : prev.losses + 1
                   const newProfit = prev.profit + p
+                  
+                  // Martingale logic implementation
+                  if (p > 0) {
+                      consecutiveLosses.current = 0
+                      currentMultiplier.current = 1
+                  } else {
+                      consecutiveLosses.current++
+                      if (consecutiveLosses.current < settings.martingaleLevel) {
+                          currentMultiplier.current *= settings.martingaleMultiplier
+                      } else {
+                          // Reset if max steps reached
+                          consecutiveLosses.current = 0
+                          currentMultiplier.current = 1
+                          addLog('RISK', `Martingale Max Steps (${settings.martingaleLevel}) reached. Resetting stake.`, 'WARNING')
+                      }
+                  }
+
                   return {
                       trades: newTrades,
                       wins: newWins,
@@ -394,17 +431,38 @@ export function useTradeBot(settings: TradeSettings) {
         }
 
 
-        if (metrics.volatility > 0) {
-            const isVolatilitySafe = metrics.volatility < settings.volatilityThreshold
-            const isSideways = metrics.trendDirection === 'sideways'
-            
-            if (settings.tradeMode === 'NO_TOUCH') {
-                if (isVolatilitySafe && isSideways) {
-                    executeTrade(metrics.barrierDistance)
+        if (cooldownTime === 0) {
+            if (settings.tradeMode === 'OVER_UNDER') {
+                const lastTick = livePrice
+                if (lastTick) {
+                    // Extract digit with precision-aware logic
+                    const precision = 4 // standard for synthetic or use a more robust way
+                    const digit = parseInt(lastTick.toFixed(precision).slice(-1))
+                    
+                    if (settings.ouSide === 'OVER') {
+                        // Strategy: Trigger Over when a low digit (0,1) appears (contrarian reversal)
+                        if (digit <= 1) {
+                            executeTrade(0)
+                        }
+                    } else if (settings.ouSide === 'UNDER') {
+                        // Strategy: Trigger Under when a high digit (8,9) appears (contrarian reversal)
+                        if (digit >= 8) {
+                            executeTrade(0)
+                        }
+                    }
                 }
-            } else if (settings.tradeMode === 'TOUCH') {
-                if (!isSideways && metrics.volatility > settings.volatilityThreshold * 0.5) {
-                    executeTrade(metrics.barrierDistance * 0.5)
+            } else if (metrics.volatility > 0) {
+                const isVolatilitySafe = metrics.volatility < settings.volatilityThreshold
+                const isSideways = metrics.trendDirection === 'sideways'
+                
+                if (settings.tradeMode === 'NO_TOUCH') {
+                    if (isVolatilitySafe && isSideways) {
+                        executeTrade(metrics.barrierDistance)
+                    }
+                } else if (settings.tradeMode === 'TOUCH') {
+                    if (!isSideways && metrics.volatility > settings.volatilityThreshold * 0.5) {
+                        executeTrade(metrics.barrierDistance * 0.5)
+                    }
                 }
             }
         }

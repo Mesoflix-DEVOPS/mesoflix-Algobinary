@@ -217,9 +217,7 @@ export function BotDisplay({
                 </div>
             )}
             <div className="relative z-10 text-center space-y-2">
-                <span className="text-[10px] font-black uppercase tracking-[0.4em] text-muted-foreground/60">
-                    {state === 'IN_TRADE' ? "Active Trade P/L" : "Net Session ROI"}
-                </span>
+                <div className="h-4" /> {/* Spacer instead of label */}
                 <h2 className={cn(
                     "text-7xl sm:text-9xl font-black font-mono tracking-tighter transition-all duration-1000",
                     (state === 'IN_TRADE' ? currentTrade?.profit >= 0 : stats.profit >= 0) 

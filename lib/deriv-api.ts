@@ -2,11 +2,18 @@ import { derivConfig } from "./deriv-config"
 
 // Deriv API Integration
 
+interface Subscription {
+    id: number;
+    request: any;
+    callback: (data: any) => void;
+}
+
 class DerivAPI {
   private ws: WebSocket | null = null
   private messageId = 0
   private responseHandlers: Map<number, { resolve: (data: any) => void, reject: (err: any) => void }> = new Map()
   private subscriptionHandlers: Map<number, (data: any) => void> = new Map()
+  private subscriptionRegistry: Map<number, Subscription> = new Map()
   private isConnected = false
   private pingInterval: any = null
   private connectionPromise: Promise<void> | null = null
@@ -22,14 +29,10 @@ class DerivAPI {
 
     if (this.pingInterval) clearInterval(this.pingInterval)
     
-    // Determine which app ID to use based on the saved auth flow
     if (typeof window !== "undefined") {
         this.currentAuthFlow = (localStorage.getItem("derivex_auth_flow") as any) || "new_v2"
     }
     
-    // V2 flow uses the public V2 WebSocket for market data (no app_id needed).
-    // Legacy flow continues using ws.derivws.com with the numeric legacy app_id.
-    // When authorize() is called under V2, the socket is swapped to an OTP-authenticated private socket.
     const defaultWsUrl = this.currentAuthFlow === "new_v2"
         ? "wss://api.derivws.com/trading/v1/options/ws/public"
         : `wss://ws.derivws.com/websockets/v3?app_id=${derivConfig.LEGACY_APP_ID}`
@@ -44,6 +47,10 @@ class DerivAPI {
           console.log("[DerivAPI] Connection established")
           this.isConnected = true
           this.startHeartbeat()
+          
+          // RESUBSCRIBE ALL ACTIVE FLOWS
+          this.resubscribeAll()
+          
           resolve()
         }
 
@@ -58,7 +65,7 @@ class DerivAPI {
             if (reqId && this.subscriptionHandlers.has(reqId)) {
                 const handler = this.subscriptionHandlers.get(reqId)
                 handler?.(data)
-                return // DO NOT DELETE persistent handlers
+                return 
             }
 
             // 2. Check one-off responses
@@ -88,9 +95,8 @@ class DerivAPI {
               handler.reject(new Error("Connection closed during request"))
           })
           this.responseHandlers.clear()
-          this.subscriptionHandlers.clear()
-          this.messageId = 0
-
+          // DONT clear subscriptionHandlers or subscriptionRegistry - we use them for recovery
+          
           setTimeout(() => {
             if (!this.intentionalDisconnect) {
                 console.log("[DerivAPI] Attempting auto-reconnect...")
@@ -108,6 +114,20 @@ class DerivAPI {
     return this.connectionPromise
   }
 
+  private resubscribeAll() {
+    if (this.subscriptionRegistry.size === 0) return
+    console.log(`[DerivAPI] Restoring ${this.subscriptionRegistry.size} active subscriptions...`)
+    
+    this.subscriptionRegistry.forEach((sub) => {
+        // Re-register handler
+        this.subscriptionHandlers.set(sub.id, sub.callback)
+        // Send request
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify({ ...sub.request, req_id: sub.id }))
+        }
+    })
+  }
+
   private async waitForConnection(): Promise<void> {
     if (this.isConnected && this.ws?.readyState === WebSocket.OPEN) return
     if (!this.connectionPromise) await this.connect()
@@ -119,7 +139,7 @@ class DerivAPI {
         if (this.isConnected && this.ws?.readyState === WebSocket.OPEN) {
             this.ws.send(JSON.stringify({ ping: 1 }))
         }
-    }, 30000)
+    }, 15000) // 15s for more active monitoring
   }
 
   disconnect() {
@@ -135,7 +155,6 @@ class DerivAPI {
       this.connectionPromise = null
       this.responseHandlers.forEach(h => h.reject(new Error("Socket swapped.")))
       this.responseHandlers.clear()
-      // We do not clear subscriptionHandlers to allow them to recover post-swap!
   }
 
   private async send(message: any): Promise<any> {
@@ -176,12 +195,9 @@ class DerivAPI {
         console.log("[DerivAPI] Intercepting authorize request for V2 Flow architecture...")
         let activeAcct = typeof window !== "undefined" ? localStorage.getItem("derivex_acct") : null
         
-        // Self-heal: If activeAcct is missing (e.g. during very first login callback), fetch it!
         if (!activeAcct) {
-            console.log("[DerivAPI] activeAcct missing during V2 Auth. Self-healing via REST account list...")
             const listData = await this.getAccountList(token)
             if (listData?.account_list?.length > 0) {
-                // Prefer real account if available, otherwise fallback to demo
                 const primary = listData.account_list.find((a: any) => a.is_virtual === 0) || listData.account_list[0]
                 activeAcct = primary.loginid
                 if (typeof window !== "undefined" && activeAcct) {
@@ -191,12 +207,10 @@ class DerivAPI {
         }
 
         if (!activeAcct) {
-            console.warn("[DerivAPI] activeAcct is strictly missing for V2 OTP fetching.")
             return { error: { message: "No active account selected/found for V2 Auth." } }
         }
         
         try {
-            console.log("[DerivAPI] Requesting OTP from https://api.derivws.com/trading/v1/options/accounts/" + activeAcct + "/otp")
             const res = await fetch(`https://api.derivws.com/trading/v1/options/accounts/${activeAcct}/otp`, {
                 method: "POST",
                 headers: {
@@ -206,21 +220,15 @@ class DerivAPI {
             })
             if (!res.ok) {
                 const text = await res.json()
-                const errSnippet = text?.errors?.[0]?.message || "OTP HTTP REST Failed"
-                console.error("[DerivAPI] OTP Fetch Failed:", text)
-                return { error: { message: errSnippet } }
+                return { error: { message: text?.errors?.[0]?.message || "OTP HTTP REST Failed" } }
             }
             const data = await res.json()
             const otpUrl = data.data?.url
             if (!otpUrl) return { error: { message: "No OTP URL returned from endpoint" } }
 
-            // Safely swap sockets inline
             this.disconnect()
             await this.connect(otpUrl)
             
-            console.log("[DerivAPI] V2 Authorized Socket established seamlessly!")
-            
-            // Falsify older format `authorize` response to ensure backward UI structural compatibility
             return { authorize: { 
                 loginid: activeAcct, 
                 email: `${activeAcct.toLowerCase()}@v2-session.deriv.local`, 
@@ -229,7 +237,6 @@ class DerivAPI {
                 fullname: `Trader ${activeAcct}`
             } }
         } catch (e: any) {
-            console.error("[DerivAPI] V2 REST Exception:", e)
             return { error: { message: e.message } }
         }
     } else {
@@ -251,24 +258,16 @@ class DerivAPI {
                 }
             })
             const data = await res.json()
-
-            // LOG the raw shape so we can see exactly what the API returns
-            console.log("[DerivAPI] Raw V2 /accounts response:", JSON.stringify(data))
-
             if (!res.ok) {
-                const errSnippet = data?.errors?.[0]?.message || "Account List Fetch Failed"
-                return { error: { message: errSnippet } }
+                return { error: { message: data?.errors?.[0]?.message || "Account List Fetch Failed" } }
             }
 
             const accounts = data.data || data.accounts || data.account_list || []
             return {
                 account_list: accounts.map((acct: any) => {
-                    // Try every known field name Deriv might use for account ID
                     const loginid = acct.account_id || acct.accountId || acct.id || acct.loginid || acct.login
-                    console.log("[DerivAPI] Mapping account:", acct, "→ loginid:", loginid)
                     return {
                         loginid,
-                        // V2 REST API uses account_type: "demo"/"real" instead of is_virtual
                         is_virtual: acct.account_type === "demo" || acct.is_virtual === true || acct.is_virtual === 1 ? 1 : 0,
                         account_type: acct.account_type,
                         currency: acct.currency || acct.account_currency || "USD",
@@ -289,32 +288,12 @@ class DerivAPI {
     return this.send({ active_symbols: "brief" })
   }
 
-  async getTicks(symbol: string, count: number = 100): Promise<any> {
-    return this.send({
-      ticks_history: {
-        symbol,
-        count,
-        style: "candles",
-        granularity: 300,
-      },
-    })
-  }
-
-  async fetchTicks(symbol: string, count: number = 100): Promise<any> {
-    return this.send({
-      ticks_history: symbol,
-      count,
-      end: "latest",
-      style: "tick",
-    })
-  }
-
   async buyContract(params: {
     contractType: string
     currency: string
     amount: number
     duration: number
-    duration_unit: "m" | "h" | "d"
+    duration_unit: "t" | "m" | "h" | "d"
     symbol: string
     barrier?: string
   }): Promise<any> {
@@ -327,9 +306,6 @@ class DerivAPI {
         duration_unit: params.duration_unit,
     }
     
-    // In V2, 'symbol' parameter is renamed to 'underlying_symbol', 
-    // but the `ticks` endpoint and `buy: parameters` might differ.
-    // For safety, pass both if we are unsure, but the v2 explicitly demands underlying_symbol.
     if (this.currentAuthFlow === "new_v2") {
         parameters.underlying_symbol = params.symbol
     } else {
@@ -350,15 +326,16 @@ class DerivAPI {
     await this.waitForConnection()
     
     const msgId = ++this.messageId
-    this.subscriptionHandlers.set(msgId, (data) => {
+    const request = { ticks: symbol, subscribe: 1 }
+    
+    const callback = (data: any) => {
         if (data.tick) onTick(data.tick)
-    })
+    }
 
-    this.ws?.send(JSON.stringify({
-        ticks: symbol,
-        subscribe: 1,
-        req_id: msgId
-    }))
+    this.subscriptionHandlers.set(msgId, callback)
+    this.subscriptionRegistry.set(msgId, { id: msgId, request, callback })
+
+    this.ws?.send(JSON.stringify({ ...request, req_id: msgId }))
     return msgId
   }
 
@@ -366,19 +343,23 @@ class DerivAPI {
     await this.waitForConnection()
 
     const msgId = ++this.messageId
-    this.subscriptionHandlers.set(msgId, (data) => {
-        if (data.history) onHistory(data.history)
-        if (data.tick) onTick(data.tick)
-    })
-
-    this.ws?.send(JSON.stringify({
+    const request = {
         ticks_history: symbol,
         end: "latest",
         count: count,
         style: "ticks",
-        subscribe: 1,
-        req_id: msgId
-    }))
+        subscribe: 1
+    }
+
+    const callback = (data: any) => {
+        if (data.history) onHistory(data.history)
+        if (data.tick) onTick(data.tick)
+    }
+
+    this.subscriptionHandlers.set(msgId, callback)
+    this.subscriptionRegistry.set(msgId, { id: msgId, request, callback })
+
+    this.ws?.send(JSON.stringify({ ...request, req_id: msgId }))
     return msgId
   }
 
@@ -386,15 +367,16 @@ class DerivAPI {
     await this.waitForConnection()
     
     const msgId = ++this.messageId
-    this.subscriptionHandlers.set(msgId, (data) => {
+    const request = { balance: 1, subscribe: 1 }
+
+    const callback = (data: any) => {
         if (data.balance) onBalance(data.balance)
-    })
+    }
+
+    this.subscriptionHandlers.set(msgId, callback)
+    this.subscriptionRegistry.set(msgId, { id: msgId, request, callback })
     
-    this.ws?.send(JSON.stringify({
-        balance: 1,
-        subscribe: 1,
-        req_id: msgId
-    }))
+    this.ws?.send(JSON.stringify({ ...request, req_id: msgId }))
     return msgId
   }
 
@@ -402,30 +384,34 @@ class DerivAPI {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return
     this.ws.send(JSON.stringify({ forget: reqId }))
     this.subscriptionHandlers.delete(reqId)
+    this.subscriptionRegistry.delete(reqId)
   }
 
   async subscribeToOpenContract(contractId: string, onUpdate: (data: any) => void): Promise<void> {
     await this.waitForConnection()
     
     const msgId = ++this.messageId
-    this.subscriptionHandlers.set(msgId, (data) => {
+    const request = {
+       proposal_open_contract: 1,
+       contract_id: contractId,
+       subscribe: 1
+    }
+
+    const callback = (data: any) => {
         if (data.proposal_open_contract) {
           onUpdate(data.proposal_open_contract)
           if (data.proposal_open_contract.is_sold) {
             this.subscriptionHandlers.delete(msgId)
+            this.subscriptionRegistry.delete(msgId)
           }
         }
-    })
+    }
 
-    this.ws?.send(JSON.stringify({
-      proposal_open_contract: 1,
-      contract_id: contractId,
-      subscribe: 1,
-      req_id: msgId
-    }))
+    this.subscriptionHandlers.set(msgId, callback)
+    this.subscriptionRegistry.set(msgId, { id: msgId, request, callback })
+
+    this.ws?.send(JSON.stringify({ ...request, req_id: msgId }))
   }
-
-// Original disconnect removed to prevent duplicate signature with V2 refactored disconnect
 }
 
 export const derivAPI = new DerivAPI()
