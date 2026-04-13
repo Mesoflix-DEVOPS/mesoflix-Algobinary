@@ -1,4 +1,4 @@
-import { crypto } from "crypto"
+import crypto from "crypto"
 import { supabase } from "./db"
 
 // Hash password using PBKDF2
@@ -14,14 +14,15 @@ export async function verifyPassword(password: string, storedHash: string): Prom
   return hash === verifyHash
 }
 
-// Simple TOTP Implementation (compatible with Google Authenticator)
-// Using base32 representation for secrets
+// Standard TOTP Base32 Implementation (compatible with Google Authenticator)
 export function generateTOTPSecret() {
-  const buffer = require("crypto").randomBytes(20)
-  // Convert to base32 manually or use a simple encoding
-  // For simplicity here, we'll return a random hex that web-apps can use
-  // but standard TOTP apps need Base32.
-  return buffer.toString("hex").toUpperCase().slice(0, 16)
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
+  const bytes = require("crypto").randomBytes(10) // 80 bits is standard
+  let secret = ""
+  for (let i = 0; i < bytes.length; i++) {
+    secret += alphabet[bytes[i] % 32]
+  }
+  return secret
 }
 
 // Generate recovery codes

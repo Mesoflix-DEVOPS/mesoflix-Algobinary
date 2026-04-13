@@ -104,10 +104,10 @@ export default function AdminLoginPage() {
   }
 
   return (
-    <main className="min-h-screen bg-black flex items-center justify-center p-4 md:p-6 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-zinc-900 via-black to-black">
+    <main className="min-h-screen bg-black flex items-center justify-center py-12 px-4 md:px-6 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-zinc-900 via-black to-black overflow-y-auto">
       <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 pointer-events-none" />
       
-      <div className="w-full max-w-md relative z-10">
+      <div className="w-full max-w-md relative z-10 py-8">
         <div className="flex justify-center mb-8">
             <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-teal-500 to-emerald-700 flex items-center justify-center shadow-2xl shadow-teal-500/20">
                 <ShieldCheck className="w-10 h-10 text-white" />
