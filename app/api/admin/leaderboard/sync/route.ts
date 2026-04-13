@@ -6,38 +6,47 @@ export async function POST(req: NextRequest) {
         // Fetch all users to recalculate scores
         const { data: users, error: userError } = await supabase
             .from("users")
-            .select("deriv_account_id, win_rate, total_trades, balance")
+            .select("id, deriv_account_id, username, win_rate, total_trades, total_wins, total_losses, balance")
         
         if (userError || !users) {
             return NextResponse.json({ error: "Failed to fetch users for ranking" }, { status: 500 })
         }
 
-        const updates = users.map(user => {
-            // Formula for rank_score that hides exact balance
-            // Score = (win_rate * 50) + (total_trades * 2) + (pseudo_profit)
-            // We use a comparative score rather than the actual balance
-            const score = (Number(user.win_rate) * 50) + (Number(user.total_trades) * 5)
-            
-            return {
-                user_id: user.deriv_account_id,
-                rank_score: score,
-                win_rate: user.win_rate,
-                total_trades: user.total_trades,
+        // Build scored + sorted leaderboard entries
+        const scored = users
+            .map(user => ({
+                user_id: user.id,
+                rank_score: (Number(user.win_rate) * 50) + (Number(user.total_trades) * 5),
+                total_profit: Number(user.balance) || 0,
+                total_trades: Number(user.total_trades) || 0,
+                win_rate: Number(user.win_rate) || 0,
+                weekly_profit: 0,
+                monthly_profit: 0,
                 updated_at: new Date().toISOString()
-            }
-        })
+            }))
+            .sort((a, b) => b.rank_score - a.rank_score)
+            .map((entry, idx) => ({ ...entry, rank: idx + 1 }))
 
-        // Upsert into leaderboard
-        const { error: upsertError } = await supabase
-            .from("leaderboard")
-            .upsert(updates, { onConflict: 'user_id' })
-
-        if (upsertError) {
-            console.error("[LeaderboardSync] Upsert Error:", upsertError)
-            return NextResponse.json({ error: upsertError.message }, { status: 500 })
+        if (scored.length === 0) {
+            return NextResponse.json({ success: true, updatedCount: 0 })
         }
 
-        return NextResponse.json({ success: true, updatedCount: updates.length })
+        // Delete all existing leaderboard rows, then reinsert with correct ranks
+        const { error: deleteError } = await supabase.from("leaderboard").delete().neq("id", "00000000-0000-0000-0000-000000000000")
+
+        if (deleteError) {
+            console.error("[LeaderboardSync] Delete Error:", deleteError)
+            // If delete fails, still try to insert (ignore existing state)
+        }
+
+        const { error: insertError } = await supabase.from("leaderboard").insert(scored)
+
+        if (insertError) {
+            console.error("[LeaderboardSync] Insert Error:", insertError)
+            return NextResponse.json({ error: insertError.message }, { status: 500 })
+        }
+
+        return NextResponse.json({ success: true, updatedCount: scored.length })
     } catch (err: any) {
         return NextResponse.json({ error: err.message }, { status: 500 })
     }

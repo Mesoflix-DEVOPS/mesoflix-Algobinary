@@ -24,9 +24,10 @@ export default function CommunityPage() {
 
   React.useEffect(() => {
     async function checkUserIdentity() {
-        const localId = localStorage.getItem("deriv_account_id")
+        // The auth callback stores the account id as 'derivex_acct'
+        const localId = localStorage.getItem("derivex_acct")
         if (!localId) {
-            router.push("/login")
+            router.push("/dashboard")
             return
         }
 
@@ -41,6 +42,15 @@ export default function CommunityPage() {
             if (!data.nickname) {
                 setIsNicknameOpen(true)
             }
+        } else {
+            // User is logged in (has account ID) but not yet in DB - allow access with fallback data
+            const storedUser = JSON.parse(localStorage.getItem("derivex_user") || "null")
+            if (storedUser) {
+                setUser({ deriv_account_id: localId, nickname: storedUser.fullname || storedUser.loginid || localId })
+            } else {
+                setUser({ deriv_account_id: localId, nickname: localId })
+            }
+            setIsNicknameOpen(true)
         }
     }
     checkUserIdentity()

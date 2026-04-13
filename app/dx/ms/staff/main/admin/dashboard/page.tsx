@@ -46,6 +46,7 @@ import { UserDetailDrawer } from "@/components/admin/user-detail"
 import {
   Sheet,
   SheetContent,
+  SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet"
 import {
@@ -206,6 +207,7 @@ export default function AdminDashboard() {
                         </Button>
                     </SheetTrigger>
                     <SheetContent side="left" className="bg-zinc-950 border-white/5 p-0 w-64">
+                        <SheetTitle className="sr-only">Admin Navigation</SheetTitle>
                         <SidebarContent />
                     </SheetContent>
                 </Sheet>
@@ -213,6 +215,10 @@ export default function AdminDashboard() {
                     <h1 className="text-xl md:text-2xl font-black uppercase tracking-tighter text-white flex items-center gap-3">
                         {activeTab === "overview" && "System Overview"}
                         {activeTab === "users" && "User Terminal"}
+                        {activeTab === "leaderboard" && "Leaderboard"}
+                        {activeTab === "news" && "News Management"}
+                        {activeTab === "broadcast" && "Broadcast Center"}
+                        {activeTab === "settings" && "Platform Security"}
                         <Badge className="bg-teal-500/10 text-teal-500 border-teal-500/20 hidden sm:inline-flex">LIVE</Badge>
                     </h1>
                 </div>
