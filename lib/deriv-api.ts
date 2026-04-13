@@ -27,11 +27,12 @@ class DerivAPI {
         this.currentAuthFlow = (localStorage.getItem("derivex_auth_flow") as any) || "new_v2"
     }
     
-    // Deriv WebSocket protocol currently mandates a numeric app_id for the transport layer,
-    // regardless of whether the session token was acquired via V1 or V2 PKCE flow.
-    // The alphanumeric CLIENT_ID is strictly for the OAuth2 authorization and token endpoints.
-    const appId = derivConfig.LEGACY_APP_ID
-    const defaultWsUrl = `wss://ws.derivws.com/websockets/v3?app_id=${appId}`
+    // V2 flow uses the public V2 WebSocket for market data (no app_id needed).
+    // Legacy flow continues using ws.derivws.com with the numeric legacy app_id.
+    // When authorize() is called under V2, the socket is swapped to an OTP-authenticated private socket.
+    const defaultWsUrl = this.currentAuthFlow === "new_v2"
+        ? "wss://api.derivws.com/trading/v1/options/ws/public"
+        : `wss://ws.derivws.com/websockets/v3?app_id=${derivConfig.LEGACY_APP_ID}`
     const wsUrl = customWsUrl || defaultWsUrl
     
     this.connectionPromise = new Promise((resolve, reject) => {

@@ -114,19 +114,42 @@ function AuthCallbackContent() {
           refreshToken = data.refresh_token || ""
           tokenExpiry = data.expires_in || 0
 
-          accountList.push({
-             token: primaryToken,
-             account: "FETCHING_V2", // Temporarily set, real account fetched during authorize() below
-             currency: "USD" 
-          })
+          // Immediately save auth flow and token so getAccountList can use them
+          localStorage.setItem("derivex_auth_flow", "new_v2")
+          localStorage.setItem("derivex_token", primaryToken)
+          derivAPI.currentAuthFlow = "new_v2"
+
+          // --- V2: Fetch account list via REST BEFORE authorize() ---
+          // This is critical: derive_acct must be set in localStorage before
+          // authorize() is called, since authorize() needs it to request the OTP.
+          console.log("[Callback] Fetching V2 account list via REST...")
+          const listResponse = await derivAPI.getAccountList(primaryToken)
+          if (listResponse?.account_list?.length > 0) {
+              accountList.length = 0
+              listResponse.account_list.forEach((acc: any) => {
+                  accountList.push({
+                      token: primaryToken,
+                      account: acc.loginid,
+                      currency: acc.currency || "USD",
+                      isDemo: acc.is_virtual === 1
+                  })
+              })
+              // Prefer real account as the primary; fallback to first account
+              const primary = accountList.find(a => !a.isDemo) || accountList[0]
+              localStorage.setItem("derivex_acct", primary.account)
+              console.log("[Callback] Primary account set to:", primary.account)
+          } else {
+              console.warn("[Callback] No accounts returned from V2 REST. Proceeding without pre-set account.")
+              accountList.push({ token: primaryToken, account: "UNKNOWN_V2", currency: "USD" })
+          }
 
           sessionStorage.removeItem('oauth_state')
           sessionStorage.removeItem('pkce_code_verifier')
-          document.cookie = "oauth_state=; max-age=0; path=/";
-          document.cookie = "pkce_code_verifier=; max-age=0; path=/";
+          document.cookie = "oauth_state=; max-age=0; path=/"
+          document.cookie = "pkce_code_verifier=; max-age=0; path=/"
 
         } else {
-          // --- Legacy Flow Tracking ---
+          // --- Legacy Flow ---
           let i = 1
           while (searchParams.get(`token${i}`)) {
             accountList.push({
@@ -144,45 +167,27 @@ function AuthCallbackContent() {
         }
 
         await new Promise(r => setTimeout(r, 800)) // Animation buffer
-        setStep(authFlow === "new_v2" ? "AUTHORIZING" : "CONNECTING") 
+        setStep(authFlow === "new_v2" ? "AUTHORIZING" : "CONNECTING")
 
-        // 2. CONNECTING
+        // 2. CONNECTING — set auth flow before connect() so it picks correct WS URL
+        derivAPI.currentAuthFlow = authFlow
         try {
             await derivAPI.connect()
         } catch (connErr) {
             console.error("Connection failed, retrying...", connErr)
             await new Promise(r => setTimeout(r, 1000))
-            await derivAPI.connect() // Simple retry
+            await derivAPI.connect()
         }
 
         await new Promise(r => setTimeout(r, 800))
         setStep("AUTHORIZING")
 
-        // 3. AUTHORIZING (Use the primary token)
+        // 3. AUTHORIZING
+        // V2: authorize() will use derivex_acct (set above) to request an OTP and swap to the private socket
+        // Legacy: authorize() sends { authorize: token } over the WS
         const authResponse = await derivAPI.authorize(primaryToken)
         if (authResponse.error) {
           throw new Error(authResponse.error.message)
-        }
-
-        // --- NEW: FETCH ACCOUNT LIST FOR V2 ---
-        if (authFlow === "new_v2") {
-            const listResponse = await derivAPI.getAccountList()
-            if (listResponse.error) {
-                console.error("Failed to fetch V2 account list:", listResponse.error)
-            } else if (listResponse.account_list && listResponse.account_list.length > 0) {
-                // Clear the temporary account placeholder
-                accountList.length = 0;
-                
-                // Populate the unified array with every real/demo account found
-                listResponse.account_list.forEach((acc: any) => {
-                    accountList.push({
-                        token: primaryToken, // Re-use global access token for V2 wrapper
-                        account: acc.loginid,
-                        currency: acc.currency || "USD",
-                        isDemo: acc.is_virtual === 1
-                    })
-                })
-            }
         }
 
         await new Promise(r => setTimeout(r, 800))
@@ -190,9 +195,9 @@ function AuthCallbackContent() {
 
         // 4. SYNCING (Save to Supabase & Register Session)
         const userData = authResponse.authorize
-        
-        // Correct the acct if we are in V2 flow where it wasn't available in URL
-        if (authFlow === "new_v2" && accountList.length === 1 && accountList[0].account === "FETCHING_V2") {
+
+        // For V2 the real account was already fetched and set; update any UNKNOWN placeholder
+        if (authFlow === "new_v2" && accountList.length === 1 && accountList[0].account === "UNKNOWN_V2") {
             accountList[0].account = userData.loginid
             accountList[0].currency = userData.currency || "USD"
         }
