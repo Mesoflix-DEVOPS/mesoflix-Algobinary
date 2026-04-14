@@ -33,9 +33,10 @@ export function BotSettings({ toolName, settings, setSettings, disabled }: BotSe
         }))
         setActiveMarkets(formatted)
         
-        // Ensure current setting is valid; if not, pick the first one
+        // Ensure current setting is valid; if not, prefer Volatility 100 Index (R_100) or pick the first one
         if (formatted.length > 0 && (!settings.market || !formatted.find((f: any) => f.value === settings.market))) {
-            setSettings((prev: any) => ({ ...prev, market: formatted[0].value }))
+            const defaultMarket = formatted.find((f: any) => f.value === 'R_100') || formatted[0]
+            setSettings((prev: any) => ({ ...prev, market: defaultMarket.value }))
         }
       } catch (e) {
         console.error("Failed to load markets:", e)

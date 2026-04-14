@@ -286,6 +286,7 @@ class DerivAPI {
 
     return this.send({
       buy: 1,
+      price: 1,
       parameters
     })
   }
