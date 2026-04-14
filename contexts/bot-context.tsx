@@ -140,6 +140,14 @@ export function BotProvider({ children }: { children: React.ReactNode }) {
   const currentMultiplier = useRef<number>(1)
   const consecutiveLosses = useRef<number>(0)
 
+  useEffect(() => {
+    const storedToken = localStorage.getItem("derivex_token")
+    const storedAcct = localStorage.getItem("derivex_acct")
+    if (storedToken && storedAcct) {
+        setSettings(prev => ({ ...prev, activeToken: storedToken, activeAcct: storedAcct }))
+    }
+  }, [])
+
   const addLog = useCallback(async (action: string, details: string, level: 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR' = 'INFO') => {
     const newLog = {
       id: Math.random().toString(36).substring(7),

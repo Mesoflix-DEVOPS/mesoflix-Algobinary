@@ -33,9 +33,7 @@ class DerivAPI {
         this.currentAuthFlow = (localStorage.getItem("derivex_auth_flow") as any) || "new_v2"
     }
     
-    const defaultWsUrl = this.currentAuthFlow === "new_v2"
-        ? "wss://api.derivws.com/trading/v1/options/ws/public"
-        : `wss://ws.derivws.com/websockets/v3?app_id=${derivConfig.LEGACY_APP_ID}`
+    const defaultWsUrl = `wss://ws.derivws.com/websockets/v3?app_id=${derivConfig.LEGACY_APP_ID}`
     const wsUrl = customWsUrl || defaultWsUrl
     
     this.connectionPromise = new Promise((resolve, reject) => {
@@ -49,17 +47,8 @@ class DerivAPI {
           this.startHeartbeat()
           
           const token = typeof window !== "undefined" ? localStorage.getItem("derivex_token") : null
-          const isPublicUrl = this.ws?.url.includes("/public")
-          
           if (token) {
-              if (this.currentAuthFlow === "new_v2" && isPublicUrl) {
-                  console.log("[DerivAPI] V2: Initiating OTP swap...")
-                  await this.authorize(token)
-                  resolve()
-                  return
-              } else if (this.currentAuthFlow === "legacy") {
-                  await this.authorize(token)
-              }
+              await this.authorize(token)
           }
 
           this.resubscribeAll()
@@ -178,47 +167,8 @@ class DerivAPI {
   }
 
   async authorize(token: string): Promise<any> {
-    if (this.currentAuthFlow === "new_v2") {
-        let activeAcct = typeof window !== "undefined" ? localStorage.getItem("derivex_acct") : null
-        
-        if (!activeAcct) {
-            const listData = await this.getAccountList(token)
-            if (listData?.account_list?.length > 0) {
-                const primary = listData.account_list.find((a: any) => a.is_virtual === 0) || listData.account_list[0]
-                activeAcct = primary.loginid
-                if (typeof window !== "undefined" && activeAcct) {
-                    localStorage.setItem("derivex_acct", activeAcct)
-                }
-            }
-        }
-
-        if (!activeAcct) return { error: { message: "No account." } }
-        
-        try {
-            const res = await fetch(`https://api.derivws.com/trading/v1/options/accounts/${activeAcct}/otp`, {
-                method: "POST",
-                headers: {
-                    "Deriv-App-ID": derivConfig.CLIENT_ID,
-                    "Authorization": `Bearer ${token}`
-                }
-            })
-            if (!res.ok) {
-                const text = await res.json()
-                return { error: { message: text?.errors?.[0]?.message || "OTP Error" } }
-            }
-            const data = await res.json()
-            const otpUrl = data.data?.url
-            if (!otpUrl) return { error: { message: "No OTP" } }
-
-            this.disconnect()
-            await this.connect(otpUrl)
-            return { authorize: { loginid: activeAcct, balance: 0, currency: "USD" } }
-        } catch (e: any) {
-            return { error: { message: e.message } }
-        }
-    } else {
-        return this.send({ authorize: token })
-    }
+    // Both V2 and Legacy tokens work with the legacy authorize message on ws.derivws.com
+    return this.send({ authorize: token })
   }
 
   async getAccountList(token?: string): Promise<any> {
