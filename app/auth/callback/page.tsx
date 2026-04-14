@@ -214,21 +214,28 @@ function AuthCallbackContent() {
         setStep("SYNCING")
 
         // 4. SYNCING (Save to Supabase & Register Session)
-        const userData = authResponse.authorize
-
-        // Build user profile — V2 OIDC userinfo doesn't expose PII to third-party apps.
-        // We generate a professional pseudonym from the account ID and let user edit it.
+        let userData = authResponse.authorize
         const primaryAccountId = accountList.find(a => !a.isDemo)?.account || accountList[0]?.account || userData.loginid
-        const traderPseudonym = `Trader_${primaryAccountId}`
-        const systemEmail = `${primaryAccountId.toLowerCase()}@v2.derivex.local`
+        const primaryAccount = accountList.find(a => !a.isDemo) || accountList[0] || { account: primaryAccountId, currency: "USD" }
 
         let userProfile: any = {
-            email: systemEmail,
-            fullname: traderPseudonym,
+            email: null,
+            fullname: null,
             loginid: primaryAccountId,
-            currency: (accountList.find(a => !a.isDemo) || accountList[0])?.currency || "USD",
-            balance: 0,
-            oidcSub: null
+            currency: primaryAccount.currency || "USD",
+            balance: 0
+        }
+
+        if (authFlow === "legacy") {
+            try {
+                const settings = await derivAPI.getAccountSettings()
+                if (settings.get_settings) {
+                    userProfile.email = settings.get_settings.email
+                    userProfile.fullname = [settings.get_settings.first_name, settings.get_settings.last_name].filter(Boolean).join(" ")
+                }
+            } catch (e) {
+                console.warn("[Callback] Failed to fetch legacy settings:", e)
+            }
         }
 
         if (authFlow === "new_v2") {
@@ -238,64 +245,59 @@ function AuthCallbackContent() {
                 })
                 if (profileRes.ok) {
                     const profile = await profileRes.json()
-                    console.log("[Callback] V2 userinfo fields:", Object.keys(profile))
-                    // Extract whatever the OIDC provider exposes
-                    userProfile.oidcSub = profile.sub || null
-                    if (profile.email) userProfile.email = profile.email
-                    if (profile.name) userProfile.fullname = profile.name
-                    else if (profile.given_name) userProfile.fullname = [profile.given_name, profile.family_name].filter(Boolean).join(" ")
-                    else if (profile.preferred_username) userProfile.fullname = profile.preferred_username
-                    // Fall back to pseudonym if nothing useful was exposed
-                    if (!userProfile.fullname || userProfile.fullname.trim() === "") userProfile.fullname = traderPseudonym
+                    userProfile.email = profile.email
+                    userProfile.fullname = profile.name || [profile.given_name, profile.family_name].filter(Boolean).join(" ")
                 }
             } catch (e) {
-                console.warn("[Callback] Could not fetch userinfo:", e)
+                console.warn("[Callback] Could not fetch V2 userinfo:", e)
             }
         }
 
-        // Fix up UNKNOWN placeholder if needed
-        if (authFlow === "new_v2" && accountList.length === 1 && accountList[0].account === "UNKNOWN_V2") {
-            accountList[0].account = primaryAccountId
-            accountList[0].currency = userProfile.currency
+        // Finalize Profile values
+        if (!userProfile.fullname || userProfile.fullname.trim() === "") {
+            userProfile.fullname = `Trader_${primaryAccountId}`
         }
-
-        // primaryAccount — the real/primary account entry for this session
-        const primaryAccount = accountList.find(a => !a.isDemo) || accountList[0] || { account: primaryAccountId, currency: "USD" }
+        if (!userProfile.email) {
+            userProfile.email = `${primaryAccountId.toLowerCase()}@derivex.local`
+        }
 
         const expiryDate = tokenExpiry > 0 ? new Date(Date.now() + tokenExpiry * 1000).toISOString() : null
 
-        // For V2 users: use deriv_account_id as conflict key since email may be a system pseudonym.
-        // For legacy users: use email as conflict key (real email is always present).
+        // Check DB for existing profile
+        const { data: existingUser } = await supabase
+            .from("users")
+            .select("id, username")
+            .eq("deriv_account_id", primaryAccountId)
+            .maybeSingle()
+
+        const isNewUser = !existingUser
+        const needsUsernameSetup = authFlow === "new_v2" && (!existingUser || !existingUser.username || existingUser.username.startsWith("Trader_"))
+
         const upsertPayload: any = {
           email: userProfile.email,
-          username: userProfile.fullname,
+          username: existingUser?.username || userProfile.fullname,
           full_name: userProfile.fullname,
           deriv_account_id: primaryAccountId,
           deriv_token: primaryToken,
           balance: userProfile.balance || 0,
-          // Flag that this profile is automatically complete for legacy institutional users
-          profile_complete: true, // Legacy accounts bypass onboarding
+          profile_complete: !needsUsernameSetup,
           auth_flow: authFlow,
         }
 
         if (refreshToken) upsertPayload.deriv_refresh_token = refreshToken
         if (expiryDate) upsertPayload.deriv_access_token_expires_at = expiryDate
 
-        // Check if this is a first-time login for this account ID
-        const { data: existingUser } = await supabase
-            .from("users")
-            .select("id")
-            .eq(authFlow === "new_v2" ? "deriv_account_id" : "email", authFlow === "new_v2" ? primaryAccountId : userProfile.email)
-            .single()
-
-        const isNewUser = !existingUser
-
-        // Use deriv_account_id as the conflict anchor for V2 — works even without a real email
-        const conflictKey = authFlow === "new_v2" ? "deriv_account_id" : "email"
-        const { error: dbError } = await supabase.from("users").upsert(upsertPayload, { onConflict: conflictKey })
+        const { error: dbError } = await supabase.from("users").upsert(upsertPayload, { onConflict: "deriv_account_id" })
 
         if (dbError) {
            console.error("Supabase upsert error:", dbError)
+        }
+
+        // Force redirect to setup-username if needed
+        if (needsUsernameSetup) {
+            localStorage.setItem("derivex_onboarding_pending", "true")
+        } else {
+            localStorage.removeItem("derivex_onboarding_pending")
         }
 
         // Trigger Welcome Notification for new users
@@ -362,7 +364,11 @@ function AuthCallbackContent() {
         setStep("FINALIZING")
         
         // 5. REDIRECT
-        router.push("/dashboard")
+        if (localStorage.getItem("derivex_onboarding_pending") === "true") {
+            router.push("/auth/setup-username")
+        } else {
+            router.push("/dashboard")
+        }
 
       } catch (err: any) {
         setStep("ERROR")

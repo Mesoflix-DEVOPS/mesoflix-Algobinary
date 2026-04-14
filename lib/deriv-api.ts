@@ -20,6 +20,11 @@ class DerivAPI {
   public currentAuthFlow: "legacy" | "new_v2" = "new_v2"
   private intentionalDisconnect = false
 
+  private isV2Token(token: string): boolean {
+    // V2 tokens are typically long JWTs or opaque strings (> 128 chars) containing dots or complex characters
+    return token.length > 128 || token.includes(".")
+  }
+
   async connect(customWsUrl?: string): Promise<void> {
     if (!this.intentionalDisconnect && this.connectionPromise && (this.ws?.readyState === WebSocket.CONNECTING || this.ws?.readyState === WebSocket.OPEN)) {
         return this.connectionPromise
@@ -29,26 +34,42 @@ class DerivAPI {
 
     if (this.pingInterval) clearInterval(this.pingInterval)
     
+    // Default flow detection from localStorage
     if (typeof window !== "undefined") {
-        this.currentAuthFlow = (localStorage.getItem("derivex_auth_flow") as any) || "new_v2"
+        this.currentAuthFlow = (localStorage.getItem("derivex_auth_flow") as any) || "legacy"
     }
     
-    const defaultWsUrl = `wss://ws.derivws.com/websockets/v3?app_id=${derivConfig.LEGACY_APP_ID}`
-    const wsUrl = customWsUrl || defaultWsUrl
+    // Choose endpoint based on known state or custom URL
+    const token = typeof window !== "undefined" ? localStorage.getItem("derivex_token") : null
+    let wsUrl = customWsUrl
+    
+    if (!wsUrl) {
+        if (token && this.isV2Token(token)) {
+            // V2 Tokens MUST use the v2 endpoint
+            wsUrl = "wss://api.derivws.com/trading/v1/options/ws/public"
+            this.currentAuthFlow = "new_v2"
+        } else {
+            // Legacy / Public use the stable legacy endpoint
+            wsUrl = `wss://ws.derivws.com/websockets/v3?app_id=${derivConfig.LEGACY_APP_ID}`
+        }
+    }
     
     this.connectionPromise = new Promise((resolve, reject) => {
       try {
         console.log(`[DerivAPI] Connecting (Flow: ${this.currentAuthFlow}):`, wsUrl)
-        this.ws = new WebSocket(wsUrl)
+        this.ws = new WebSocket(wsUrl!)
 
         this.ws.onopen = async () => {
           console.log("[DerivAPI] Connection established")
           this.isConnected = true
           this.startHeartbeat()
           
-          const token = typeof window !== "undefined" ? localStorage.getItem("derivex_token") : null
           if (token) {
-              await this.authorize(token)
+              try {
+                await this.authorize(token)
+              } catch (e) {
+                console.warn("[DerivAPI] Background authorization failed:", e)
+              }
           }
 
           this.resubscribeAll()
@@ -58,10 +79,10 @@ class DerivAPI {
         this.ws.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data)
-            if (data.msg_type === "ping") return
+            // Handle V2 vs Legacy Heartbeats
+            if (data.msg_type === "ping" || data.ping) return
             
             if (data.error?.code === 'AlreadySubscribed') {
-                console.log("[DerivAPI] Session inherited subscription:", data.error.message)
                 return
             }
 
@@ -95,9 +116,10 @@ class DerivAPI {
           this.responseHandlers.forEach(h => h.reject(new Error("Lost")))
           this.responseHandlers.clear()
           if (this.pingInterval) clearInterval(this.pingInterval)
-          setTimeout(() => {
-            if (!this.intentionalDisconnect) this.connect(customWsUrl)
-          }, 3000)
+          
+          if (!this.intentionalDisconnect) {
+            setTimeout(() => this.connect(customWsUrl), 3000)
+          }
         }
       } catch (err) {
         this.isConnected = false
@@ -111,7 +133,7 @@ class DerivAPI {
 
   private resubscribeAll() {
     if (this.subscriptionRegistry.size === 0) return
-    console.log(`[DerivAPI] Restoring ${this.subscriptionRegistry.size} multiplexed sources...`)
+    console.log(`[DerivAPI] Restoring ${this.subscriptionRegistry.size} subscriptions...`)
     this.subscriptionRegistry.forEach((sub) => {
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
             this.ws.send(JSON.stringify({ ...sub.request, req_id: sub.id }))
@@ -121,14 +143,17 @@ class DerivAPI {
 
   private async waitForConnection(): Promise<void> {
     if (this.isConnected && this.ws?.readyState === WebSocket.OPEN) return
-    if (!this.connectionPromise) await this.connect()
-    else await this.connectionPromise
+    await this.connect()
   }
 
   private startHeartbeat() {
     this.pingInterval = setInterval(() => {
         if (this.isConnected && this.ws?.readyState === WebSocket.OPEN) {
-            this.ws.send(JSON.stringify({ ping: 1 }))
+            // V2 Private endpoint uses msg_type: "ping", legacy uses ping: 1
+            const pingMsg = this.isV2Token(localStorage.getItem("derivex_token") || "")
+              ? { msg_type: "ping" }
+              : { ping: 1 }
+            this.ws.send(JSON.stringify(pingMsg))
         }
     }, 15000)
   }
@@ -150,7 +175,7 @@ class DerivAPI {
 
     return new Promise((resolve, reject) => {
       if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-        reject(new Error("No socket"))
+        reject(new Error("No connection"))
         return
       }
       this.messageId++
@@ -167,15 +192,44 @@ class DerivAPI {
   }
 
   async authorize(token: string): Promise<any> {
-    // Both V2 and Legacy tokens work with the legacy authorize message on ws.derivws.com
-    return this.send({ authorize: token })
+    if (this.isV2Token(token)) {
+        // --- V2 OTP Flow ---
+        const activeAcct = typeof window !== "undefined" ? localStorage.getItem("derivex_acct") : null
+        if (!activeAcct) throw new Error("No active account for V2 authorization.")
+        
+        console.log("[DerivAPI] V2: Initiating OTP swap...")
+        try {
+            const res = await fetch(`https://api.derivws.com/trading/v1/options/ws/demo?account_id=${activeAcct}`, {
+                method: "POST",
+                headers: { "Authorization": `Bearer ${token}` }
+            })
+            if (!res.ok) throw new Error("OTP request failed.")
+            const data = await res.json()
+            const otpUrl = data.ws_url
+            if (!otpUrl) throw new Error("No OTP URL returned.")
+            
+            // Reconnect to the OTP URL (this automatically authorizes the socket)
+            this.intentionalDisconnect = true
+            this.ws?.close() 
+            await this.connect(otpUrl)
+            return { authorize: { loginid: activeAcct } }
+        } catch (e) {
+            console.error("[DerivAPI] V2 Auth Failed:", e)
+            return { error: e }
+        }
+    } else {
+        // --- Legacy Path ---
+        return this.send({ authorize: token })
+    }
+  }
+
+  async getAccountSettings(): Promise<any> {
+    return this.send({ get_settings: 1 })
   }
 
   async getAccountList(token?: string): Promise<any> {
-    if (this.currentAuthFlow === "new_v2") {
-        const activeToken = token || (typeof window !== "undefined" ? localStorage.getItem("derivex_token") : null)
-        if (!activeToken) return { error: { message: "No token." } }
-        
+    const activeToken = token || (typeof window !== "undefined" ? localStorage.getItem("derivex_token") : null)
+    if (activeToken && this.isV2Token(activeToken)) {
         try {
             const res = await fetch("https://api.derivws.com/trading/v1/options/accounts", {
                 method: "GET",
