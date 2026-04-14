@@ -1,6 +1,6 @@
 import { derivConfig } from "./deriv-config"
 
-// Deriv API Integration
+// Deriv API Integration - V2 Hardened
 
 interface Subscription {
     id: number;
@@ -254,8 +254,11 @@ class DerivAPI {
   }
 
   async getSyntheticMarkets(): Promise<any[]> {
-    // V2 Unified active_symbols does NOT allow product_type or contract_type as top-level params in brief mode usually
-    const resp = await this.send({ active_symbols: "brief" })
+    // V2 Unified active_symbols: product_type is often required for options symbols
+    const request: any = { active_symbols: "brief" }
+    if (this.currentAuthFlow === "new_v2") request.product_type = "options"
+    
+    const resp = await this.send(request)
     if (!resp.active_symbols) return []
     return resp.active_symbols.filter((s: any) => 
         (s.market === 'synthetic_index' || s.submarket === 'volatility_indices' || s.submarket === 'jump_indices') 
@@ -286,7 +289,7 @@ class DerivAPI {
 
     return this.send({
       buy: 1,
-      price: 1,
+      price: params.amount, // MUST match the stake amount for maximum purchase price
       parameters
     })
   }
@@ -318,7 +321,6 @@ class DerivAPI {
   }
 
   async subscribeToTicks(symbol: string, onTick: (data: any) => void): Promise<number | null> {
-    // V2 Unified ticks does NOT allow underlying_symbol as a redundant key
     const request = { ticks: symbol, subscribe: 1 }
     return this.createMultiplexedSub(request, (data) => {
         if (data.tick) onTick(data.tick)

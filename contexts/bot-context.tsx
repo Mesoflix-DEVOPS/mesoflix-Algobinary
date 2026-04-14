@@ -98,7 +98,7 @@ const DEFAULT_SETTINGS: TradeSettings = {
   cooldownDuration: 1,
   market: 'R_100',
   autoSwitch: true,
-  tradeMode: 'NO_TOUCH',
+  tradeMode: 'OVER_UNDER', // Default to Over/Under for this phase
   ouSide: 'OVER',
   ouTarget: 1,
   martingaleMultiplier: 2,
@@ -245,7 +245,7 @@ export function BotProvider({ children }: { children: React.ReactNode }) {
         return
     }
     try {
-        addLog('AUTH', `Synchronizing session for ${settings.activeAcct}...`)
+        addLog('AUTH', `Synchronizing and Authorizing V2 Session for ${settings.activeAcct}...`)
         const authResp = await derivAPI.authorize(settings.activeToken)
         if (authResp.error) {
             addLog('ERROR', `Broker Refused: ${authResp.error.message}`, 'ERROR')
@@ -254,7 +254,7 @@ export function BotProvider({ children }: { children: React.ReactNode }) {
         
         consecutiveLosses.current = 0
         currentMultiplier.current = 1
-        addLog('START', `StatEngine Online. Monitoring ${settings.market}...`, 'SUCCESS')
+        addLog('START', `Digit Engine Online. Monitoring ${settings.market} for ${settings.ouSide} patterns...`, 'SUCCESS')
         setState('SCANNING')
         stateRef.current = 'SCANNING'
 
@@ -301,19 +301,19 @@ export function BotProvider({ children }: { children: React.ReactNode }) {
     try {
       let contractType: string
       let barrier: string
-      let duration = 2
-      let durationUnit: 'm' | 't' = 'm'
+      let duration = 1
+      let durationUnit: 'm' | 't' = 't'
 
       if (settings.tradeMode === 'OVER_UNDER') {
         contractType = settings.ouSide === 'UNDER' ? 'DIGITUNDER' : 'DIGITOVER'
         barrier = String(settings.ouTarget !== undefined ? settings.ouTarget : (settings.ouSide === 'UNDER' ? 8 : 1))
-        duration = 1
-        durationUnit = 't'
-        addLog('ENTRY', `Digit Strategy: Placing 1-tick ${settings.ouSide} ${barrier} (Stake: ${(settings.stake * currentMultiplier.current).toFixed(2)})`, 'SUCCESS')
+        addLog('ENTRY', `Executing DIGIT ${settings.ouSide}: Barrier ${barrier} (Stake: ${(settings.stake * currentMultiplier.current).toFixed(2)})`, 'SUCCESS')
       } else {
         contractType = settings.tradeMode === 'TOUCH' ? 'ONETOUCH' : 'NOTOUCH'
         barrier = `+${computedBarrier.toFixed(2)}`
-        addLog('ENTRY', `Placing ${contractType} contract at barrier ${barrier}`, 'SUCCESS')
+        duration = 2
+        durationUnit = 'm'
+        addLog('ENTRY', `Executing ${contractType}: Barrier ${barrier} (Stake: ${(settings.stake * currentMultiplier.current).toFixed(2)})`, 'SUCCESS')
       }
       
       const stakeAmount = Number((settings.stake * currentMultiplier.current).toFixed(2))
@@ -406,12 +406,12 @@ export function BotProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (state === 'SCANNING') {
         if (stats.trades >= settings.maxTrades) {
-            addLog('HALT', `Limit (${settings.maxTrades}) reached.`, 'WARNING')
+            addLog('HALT', `Session Limit reached.`, 'WARNING')
             stopBot()
             return
         }
         if (stats.profit >= settings.takeProfit) {
-            addLog('HALT', `Profit goal achieved.`, 'SUCCESS')
+            addLog('HALT', `Profit Target achieved.`, 'SUCCESS')
             stopBot()
             return
         }
@@ -425,7 +425,7 @@ export function BotProvider({ children }: { children: React.ReactNode }) {
             setState('COOLDOWN')
             stateRef.current = 'COOLDOWN'
             setCooldownTime(settings.cooldownDuration * 60)
-            addLog('COOLDOWN', `Milestone Reached. Cooling down.`, 'WARNING')
+            addLog('COOLDOWN', `Safety Pause initiated.`, 'WARNING')
             return
         }
         
@@ -477,7 +477,7 @@ export function BotProvider({ children }: { children: React.ReactNode }) {
         consecutiveLosses.current = 0
         currentMultiplier.current = 1
       },
-      closeTrade: () => addLog('HALT', 'Manual closure disabled for strategy integrity.', 'WARNING')
+      closeTrade: () => addLog('HALT', 'Manual closure disabled.', 'WARNING')
     }}>
       {children}
     </BotContext.Provider>
