@@ -25,7 +25,7 @@ class DerivAPI {
     return token.length > 128 || token.includes(".")
   }
 
-  async connect(customWsUrl?: string): Promise<void> {
+  async connect(customWsUrl?: string, skipAuthorize: boolean = false): Promise<void> {
     if (!this.intentionalDisconnect && this.connectionPromise && (this.ws?.readyState === WebSocket.CONNECTING || this.ws?.readyState === WebSocket.OPEN)) {
         return this.connectionPromise
     }
@@ -64,12 +64,17 @@ class DerivAPI {
           this.isConnected = true
           this.startHeartbeat()
           
-          if (token) {
+          // CRITICAL: Prevent infinite authorization loop
+          // If skipAuthorize is true OR the URL already contains an OTP, the socket is already authorized.
+          const isOTPUrl = wsUrl?.includes("otp=")
+          if (token && !skipAuthorize && !isOTPUrl) {
               try {
                 await this.authorize(token)
               } catch (e) {
                 console.warn("[DerivAPI] Background authorization failed:", e)
               }
+          } else if (isOTPUrl) {
+              console.log("[DerivAPI] Authenticated V2 session active via OTP.")
           }
 
           this.resubscribeAll()
@@ -149,11 +154,8 @@ class DerivAPI {
   private startHeartbeat() {
     this.pingInterval = setInterval(() => {
         if (this.isConnected && this.ws?.readyState === WebSocket.OPEN) {
-            // V2 Private endpoint uses msg_type: "ping", legacy uses ping: 1
-            const pingMsg = this.isV2Token(localStorage.getItem("derivex_token") || "")
-              ? { msg_type: "ping" }
-              : { ping: 1 }
-            this.ws.send(JSON.stringify(pingMsg))
+            // Standard Deriv heartbeat format
+            this.ws.send(JSON.stringify({ ping: 1 }))
         }
     }, 15000)
   }
@@ -219,7 +221,7 @@ class DerivAPI {
             console.log("[DerivAPI] V2: OTP Swap successful. Migrating connection...")
             this.intentionalDisconnect = true
             this.ws?.close() 
-            await this.connect(authenticatedWsUrl)
+            await this.connect(authenticatedWsUrl, true)
             return { authorize: { loginid: activeAcct } }
         } catch (e: any) {
             console.error("[DerivAPI] V2 Auth Failed:", e)
