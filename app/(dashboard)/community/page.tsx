@@ -25,7 +25,6 @@ export default function CommunityPage() {
 
   React.useEffect(() => {
     async function checkUserIdentity() {
-        // The auth callback stores the account id as 'derivex_acct'
         const localId = localStorage.getItem("derivex_acct")
         if (!localId) {
             router.push("/dashboard")
@@ -44,7 +43,6 @@ export default function CommunityPage() {
                 setIsNicknameOpen(true)
             }
         } else {
-            // User is logged in (has account ID) but not yet in DB - allow access with fallback data
             const storedUser = JSON.parse(localStorage.getItem("derivex_user") || "null")
             if (storedUser) {
                 setUser({ deriv_account_id: localId, nickname: storedUser.fullname || storedUser.loginid || localId })
@@ -57,7 +55,6 @@ export default function CommunityPage() {
     checkUserIdentity()
   }, [router])
 
-  // Anonymous, realistic community leaderboard (mirrors the main leaderboard mock data)
   const leaderboard = [
     { rank: 1, maskedId: "VLTX3*****", profit: "+$247.80", winRate: "74%", trades: 38, medal: "🥇" },
     { rank: 2, maskedId: "CR09X*****", profit: "+$183.50", winRate: "68%", trades: 29, medal: "🥈" },
@@ -75,7 +72,6 @@ export default function CommunityPage() {
       <div className="absolute inset-0 z-20 flex flex-col p-4 md:p-8 overflow-y-auto">
         <div className="w-full max-w-7xl mx-auto mb-8 flex flex-col md:flex-row md:items-end justify-between gap-6 pointer-events-none">
           <div className="pointer-events-auto">
-            {/* Back to dashboard */}
             <Link href="/dashboard" className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-gray-500 hover:text-white border border-white/10 hover:border-white/20 px-3 py-1.5 rounded-xl mb-4 transition-all">
               <ArrowLeft className="w-3 h-3" /> Back to Trading Panel
             </Link>
@@ -121,7 +117,6 @@ export default function CommunityPage() {
             </TabsContent>
 
             <TabsContent value="leaderboard" className="focus-visible:ring-0 outline-none">
-                {/* Top 3 Showcase */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
                     {leaderboard.slice(0, 3).map((trader) => (
                     <div

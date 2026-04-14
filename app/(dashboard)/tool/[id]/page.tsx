@@ -60,7 +60,7 @@ export default function SessionTraderPage() {
                 toolName={toolName}
                 settings={settings} 
                 setSettings={setSettings} 
-                disabled={bot.state !== 'IDLE' && bot.state !== 'STOPPED'} 
+                disabled={bot.state === 'IN_TRADE'} 
             />
         </div>
 

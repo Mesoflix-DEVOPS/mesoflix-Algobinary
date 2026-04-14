@@ -5,15 +5,15 @@ import { derivConfig } from "./deriv-config"
 interface Subscription {
     id: number;
     request: any;
-    callbacks: Set<(data: any) => void>; // Support multiple listeners per request
+    callbacks: Set<(data: any) => void>;
 }
 
 class DerivAPI {
   private ws: WebSocket | null = null
   private messageId = 0
   private responseHandlers: Map<number, { resolve: (data: any) => void, reject: (err: any) => void }> = new Map()
-  private subscriptionRegistry: Map<string, Subscription> = new Map() // Keyed by request JSON string for deduplication
-  private idToSubKey: Map<number, string> = new Map() // Reverse lookup for unsubscribing
+  private subscriptionRegistry: Map<string, Subscription> = new Map()
+  private idToSubKey: Map<number, string> = new Map()
   private isConnected = false
   private pingInterval: any = null
   private connectionPromise: Promise<void> | null = null
@@ -69,12 +69,10 @@ class DerivAPI {
         this.ws.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data)
-            
             if (data.msg_type === "ping") return
             
-            // Silently handle 'AlreadySubscribed' - it's a notification, not a fatal failure
             if (data.error?.code === 'AlreadySubscribed') {
-                console.log("[DerivAPI] Server confirmed existing subscription:", data.error.message)
+                console.log("[DerivAPI] Session inherited subscription:", data.error.message)
                 return
             }
 
@@ -83,8 +81,6 @@ class DerivAPI {
             }
 
             const reqId = data.req_id
-            
-            // Check if this reqId belongs to a subscription
             const subKey = this.idToSubKey.get(reqId)
             if (subKey) {
                 const sub = this.subscriptionRegistry.get(subKey)
@@ -98,7 +94,7 @@ class DerivAPI {
                 this.responseHandlers.delete(reqId)
             }
           } catch (err) {
-            console.error("[DerivAPI] Error parsing message:", err)
+            console.error("[DerivAPI] Parse error:", err)
           }
         }
 
@@ -107,17 +103,11 @@ class DerivAPI {
           this.connectionPromise = null
           this.messageId = 0
           console.log("[DerivAPI] Connection closed")
-          
-          this.responseHandlers.forEach(h => h.reject(new Error("Connection lost")))
+          this.responseHandlers.forEach(h => h.reject(new Error("Lost")))
           this.responseHandlers.clear()
-          
           if (this.pingInterval) clearInterval(this.pingInterval)
-
           setTimeout(() => {
-            if (!this.intentionalDisconnect) {
-                console.log("[DerivAPI] Attempting auto-reconnect...")
-                this.connect(customWsUrl)
-            }
+            if (!this.intentionalDisconnect) this.connect(customWsUrl)
           }, 3000)
         }
       } catch (err) {
@@ -132,8 +122,7 @@ class DerivAPI {
 
   private resubscribeAll() {
     if (this.subscriptionRegistry.size === 0) return
-    console.log(`[DerivAPI] Multiplexing ${this.subscriptionRegistry.size} stream sources...`)
-    
+    console.log(`[DerivAPI] Restoring ${this.subscriptionRegistry.size} multiplexed sources...`)
     this.subscriptionRegistry.forEach((sub) => {
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
             this.ws.send(JSON.stringify({ ...sub.request, req_id: sub.id }))
@@ -172,15 +161,13 @@ class DerivAPI {
 
     return new Promise((resolve, reject) => {
       if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-        reject(new Error("Socket not ready"))
+        reject(new Error("No socket"))
         return
       }
-
       this.messageId++
       const msgId = this.messageId
       const payload = { ...message, req_id: msgId }
       this.responseHandlers.set(msgId, { resolve, reject })
-
       try {
         this.ws.send(JSON.stringify(payload))
       } catch (error) {
@@ -199,11 +186,13 @@ class DerivAPI {
             if (listData?.account_list?.length > 0) {
                 const primary = listData.account_list.find((a: any) => a.is_virtual === 0) || listData.account_list[0]
                 activeAcct = primary.loginid
-                if (typeof window !== "undefined" && activeAcct) localStorage.setItem("derivex_acct", activeAcct)
+                if (typeof window !== "undefined" && activeAcct) {
+                    localStorage.setItem("derivex_acct", activeAcct)
+                }
             }
         }
 
-        if (!activeAcct) return { error: { message: "No account found." } }
+        if (!activeAcct) return { error: { message: "No account." } }
         
         try {
             const res = await fetch(`https://api.derivws.com/trading/v1/options/accounts/${activeAcct}/otp`, {
@@ -219,11 +208,10 @@ class DerivAPI {
             }
             const data = await res.json()
             const otpUrl = data.data?.url
-            if (!otpUrl) return { error: { message: "No OTP URL" } }
+            if (!otpUrl) return { error: { message: "No OTP" } }
 
             this.disconnect()
             await this.connect(otpUrl)
-            
             return { authorize: { loginid: activeAcct, balance: 0, currency: "USD" } }
         } catch (e: any) {
             return { error: { message: e.message } }
@@ -246,6 +234,7 @@ class DerivAPI {
                     "Authorization": `Bearer ${activeToken}`
                 }
             })
+            if (!res.ok) return { error: { message: "List Failed" } }
             const data = await res.json()
             const accounts = data.data || data.accounts || data.account_list || []
             return {
@@ -265,14 +254,9 @@ class DerivAPI {
   }
 
   async getSyntheticMarkets(): Promise<any[]> {
-    const resp = await this.send({ 
-        active_symbols: "brief", 
-        product_type: "basic"
-    })
-    
+    // V2 Unified active_symbols does NOT allow product_type or contract_type as top-level params in brief mode usually
+    const resp = await this.send({ active_symbols: "brief" })
     if (!resp.active_symbols) return []
-    
-    // Filter for Volatility and Jump Indices
     return resp.active_symbols.filter((s: any) => 
         (s.market === 'synthetic_index' || s.submarket === 'volatility_indices' || s.submarket === 'jump_indices') 
         && s.exchange_is_open === 1
@@ -295,8 +279,7 @@ class DerivAPI {
         currency: params.currency,
         duration: params.duration,
         duration_unit: params.duration_unit,
-        symbol: params.symbol,
-        underlying_symbol: params.symbol
+        symbol: params.symbol
     }
     
     if (params.barrier) parameters.barrier = String(params.barrier)
@@ -307,15 +290,12 @@ class DerivAPI {
     })
   }
 
-  // --- MULTIPLEXED SUBSCRIPTION CORE ---
   private async createMultiplexedSub(request: any, onUpdate: (data: any) => void): Promise<number> {
     await this.waitForConnection()
-    
     const subKey = JSON.stringify(request)
     const existing = this.subscriptionRegistry.get(subKey)
 
     if (existing) {
-        console.log("[DerivAPI] Reuse existing stream for:", subKey)
         existing.callbacks.add(onUpdate)
         const mockId = Math.floor(Math.random() * 1000000)
         this.idToSubKey.set(mockId, subKey)
@@ -328,25 +308,17 @@ class DerivAPI {
         request,
         callbacks: new Set([onUpdate])
     }
-
     this.subscriptionRegistry.set(subKey, newSub)
     this.idToSubKey.set(msgId, subKey)
-
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
         this.ws.send(JSON.stringify({ ...request, req_id: msgId }))
     }
-
     return msgId
   }
 
   async subscribeToTicks(symbol: string, onTick: (data: any) => void): Promise<number | null> {
-    const request = { 
-        ticks: symbol, 
-        subscribe: 1,
-        // Hardening for V2
-        ...(this.currentAuthFlow === 'new_v2' ? { underlying_symbol: symbol } : {})
-    }
-    
+    // V2 Unified ticks does NOT allow underlying_symbol as a redundant key
+    const request = { ticks: symbol, subscribe: 1 }
     return this.createMultiplexedSub(request, (data) => {
         if (data.tick) onTick(data.tick)
     })
@@ -358,10 +330,8 @@ class DerivAPI {
         end: "latest",
         count: count,
         style: "ticks",
-        subscribe: 1,
-        ...(this.currentAuthFlow === 'new_v2' ? { underlying_symbol: symbol } : {})
+        subscribe: 1
     }
-
     return this.createMultiplexedSub(request, (data) => {
         if (data.history) onHistory(data.history)
         if (data.tick) onTick(data.tick)
@@ -369,8 +339,7 @@ class DerivAPI {
   }
 
   async subscribeToBalance(onBalance: (data: any) => void): Promise<number | null> {
-    const request = { balance: 1, subscribe: 1 }
-    return this.createMultiplexedSub(request, (data) => {
+    return this.createMultiplexedSub({ balance: 1, subscribe: 1 }, (data) => {
         if (data.balance) onBalance(data.balance)
     })
   }
@@ -378,14 +347,8 @@ class DerivAPI {
   async unsubscribe(reqId: number): Promise<void> {
     const subKey = this.idToSubKey.get(reqId)
     if (!subKey) return
-
     const sub = this.subscriptionRegistry.get(subKey)
-    if (sub) {
-        // In a real environment, we'd remove specific callbacks.
-        // For simplicity, we just keep the stream alive if others are using it.
-        // If we want to truly unsubscribe from Deriv, we'd check if callbacks.size === 0
-        this.idToSubKey.delete(reqId)
-    }
+    if (sub) this.idToSubKey.delete(reqId)
   }
 
   async subscribeToOpenContract(contractId: string, onUpdate: (data: any) => void): Promise<void> {
