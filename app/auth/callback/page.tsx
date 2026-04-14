@@ -273,6 +273,7 @@ function AuthCallbackContent() {
         const isNewUser = !existingUser
         const needsUsernameSetup = authFlow === "new_v2" && (!existingUser || !existingUser.username || existingUser.username.startsWith("Trader_"))
 
+        // Always update full_name and email to keep identity synced with Deriv
         const upsertPayload: any = {
           email: userProfile.email,
           username: existingUser?.username || userProfile.fullname,

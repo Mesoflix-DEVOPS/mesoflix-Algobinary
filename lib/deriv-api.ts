@@ -199,9 +199,12 @@ class DerivAPI {
         
         console.log("[DerivAPI] V2: Initiating OTP swap...")
         try {
-            const res = await fetch(`https://api.derivws.com/trading/v1/options/ws/demo?account_id=${activeAcct}`, {
+            const res = await fetch(`https://api.derivws.com/trading/v1/options/ws/${activeAcct}`, {
                 method: "POST",
-                headers: { "Authorization": `Bearer ${token}` }
+                headers: { 
+                    "Authorization": `Bearer ${token}`,
+                    "Deriv-App-ID": derivConfig.CLIENT_ID
+                }
             })
             if (!res.ok) throw new Error("OTP request failed.")
             const data = await res.json()
