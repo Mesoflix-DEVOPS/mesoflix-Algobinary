@@ -193,32 +193,37 @@ class DerivAPI {
 
   async authorize(token: string): Promise<any> {
     if (this.isV2Token(token)) {
-        // --- V2 OTP Flow ---
+        // --- V2 OTP Flow (Backend Proxy) ---
+        // Browser fetch to api.derivws.com is blocked by CORS.
+        // We use our local backend route to fetch the authenticated OTP URL.
         const activeAcct = typeof window !== "undefined" ? localStorage.getItem("derivex_acct") : null
         if (!activeAcct) throw new Error("No active account for V2 authorization.")
         
-        console.log("[DerivAPI] V2: Initiating OTP swap...")
+        console.log("[DerivAPI] V2: Initiating OTP swap via backend proxy...")
         try {
-            const res = await fetch(`https://api.derivws.com/trading/v1/options/ws/${activeAcct}`, {
+            const res = await fetch(`/api/auth/deriv/otp`, {
                 method: "POST",
-                headers: { 
-                    "Authorization": `Bearer ${token}`,
-                    "Deriv-App-ID": derivConfig.CLIENT_ID
-                }
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ accountId: activeAcct, token })
             })
-            if (!res.ok) throw new Error("OTP request failed.")
-            const data = await res.json()
-            const otpUrl = data.ws_url
-            if (!otpUrl) throw new Error("No OTP URL returned.")
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}))
+                throw new Error(errData.error || "OTP swap failed.")
+            }
             
-            // Reconnect to the OTP URL (this automatically authorizes the socket)
+            const data = await res.json()
+            const authenticatedWsUrl = data.ws_url
+            if (!authenticatedWsUrl) throw new Error("No authenticated WebSocket URL returned.")
+            
+            // Swap to the authenticated WebSocket session
+            console.log("[DerivAPI] V2: OTP Swap successful. Migrating connection...")
             this.intentionalDisconnect = true
             this.ws?.close() 
-            await this.connect(otpUrl)
+            await this.connect(authenticatedWsUrl)
             return { authorize: { loginid: activeAcct } }
-        } catch (e) {
+        } catch (e: any) {
             console.error("[DerivAPI] V2 Auth Failed:", e)
-            return { error: e }
+            return { error: { message: e.message } }
         }
     } else {
         // --- Legacy Path ---
@@ -234,22 +239,27 @@ class DerivAPI {
     const activeToken = token || (typeof window !== "undefined" ? localStorage.getItem("derivex_token") : null)
     if (activeToken && this.isV2Token(activeToken)) {
         try {
-            const res = await fetch("https://api.derivws.com/trading/v1/options/accounts", {
+            console.log("[DerivAPI] Fetching V2 account list via proxy...")
+            const res = await fetch("/api/auth/deriv/accounts", {
                 method: "GET",
                 headers: {
-                    "Deriv-App-ID": derivConfig.CLIENT_ID,
                     "Authorization": `Bearer ${activeToken}`
                 }
             })
-            if (!res.ok) return { error: { message: "List Failed" } }
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}))
+                return { error: { message: errData.error || "List Failed" } }
+            }
             const data = await res.json()
-            const accounts = data.data || data.accounts || data.account_list || []
+            const accounts = data.data || []
             return {
                 account_list: accounts.map((acct: any) => ({
                     loginid: acct.account_id || acct.id || acct.loginid,
                     is_virtual: acct.account_type === "demo" ? 1 : 0,
                     currency: acct.currency || "USD",
-                    token: activeToken
+                    token: activeToken,
+                    // Map balance for the syncBalances efficiency
+                    balance: acct.balance || 0
                 }))
             }
         } catch (e: any) {
