@@ -254,11 +254,7 @@ class DerivAPI {
   }
 
   async getSyntheticMarkets(): Promise<any[]> {
-    // V2 Unified active_symbols: product_type is often required for options symbols
-    const request: any = { active_symbols: "brief" }
-    if (this.currentAuthFlow === "new_v2") request.product_type = "options"
-    
-    const resp = await this.send(request)
+    const resp = await this.send({ active_symbols: "brief" })
     if (!resp.active_symbols) return []
     return resp.active_symbols.filter((s: any) => 
         (s.market === 'synthetic_index' || s.submarket === 'volatility_indices' || s.submarket === 'jump_indices') 
