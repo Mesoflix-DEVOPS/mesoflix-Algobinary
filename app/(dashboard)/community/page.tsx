@@ -212,7 +212,7 @@ export default function CommunityPage() {
       <NicknameDialog 
         isOpen={isNicknameOpen} 
         userId={user?.deriv_account_id} 
-        onComplete={(name) => {
+        onComplete={(name: string) => {
             setUser((prev: any) => ({ ...prev, nickname: name }))
             setIsNicknameOpen(false)
         }}
