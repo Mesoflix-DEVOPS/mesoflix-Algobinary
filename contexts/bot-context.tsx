@@ -17,10 +17,12 @@ interface TradeSettings {
   market: string
   autoSwitch: boolean
   tradeMode: TradeMode
+  ouSide?: 'OVER' | 'UNDER'
+  ouTarget?: number
+  martingaleMultiplier: number
+  martingaleLevel: number
   kMultiplier: number
   volatilityThreshold: number
-  overBarrier: number
-  underBarrier: number
   recoveryStrategy: 'martingale' | 'fixed'
   recoveryStep: number
   activeToken?: string
@@ -51,8 +53,8 @@ interface StrategicMetrics {
   trendStrength: number 
   trendDirection: 'sideways' | 'bullish' | 'bearish'
   barrierDistance: number
-  tickHistogram: number[] // length 10, frequency of last digit
-  recentAvg: number // average of last 1000 ticks
+  tickHistogram: number[]
+  recentAvg: number
 }
 
 export interface Trade {
@@ -97,10 +99,12 @@ const DEFAULT_SETTINGS: TradeSettings = {
   market: 'R_100',
   autoSwitch: true,
   tradeMode: 'NO_TOUCH',
+  ouSide: 'OVER',
+  ouTarget: 1,
+  martingaleMultiplier: 2,
+  martingaleLevel: 5,
   kMultiplier: 10,
   volatilityThreshold: 0.5,
-  overBarrier: 2,
-  underBarrier: 8,
   recoveryStrategy: 'martingale',
   recoveryStep: 10,
   toolId: ''
@@ -125,7 +129,6 @@ export function BotProvider({ children }: { children: React.ReactNode }) {
   })
   const [tradeHistory, setTradeHistory] = useState<Trade[]>([])
 
-  // Internal Refs
   const balanceSubId = useRef<number | null>(null)
   const stateRef = useRef<BotState>('IDLE')
   const tickSubId = useRef<number | null>(null)
@@ -133,10 +136,10 @@ export function BotProvider({ children }: { children: React.ReactNode }) {
   const lastCooldownCount = useRef<number>(0)
   const sessionId = useRef<string | null>(null)
   const lastTradeEndTime = useRef<number>(0)
-  const isRestored = useRef(false)
   const isDemo = settings.activeAcct?.startsWith('VRTC')
+  const currentMultiplier = useRef<number>(1)
+  const consecutiveLosses = useRef<number>(0)
 
-  // Log Engine
   const addLog = useCallback(async (action: string, details: string, level: 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR' = 'INFO') => {
     const newLog = {
       id: Math.random().toString(36).substring(7),
@@ -154,7 +157,6 @@ export function BotProvider({ children }: { children: React.ReactNode }) {
     }
   }, [isDemo, settings.toolId])
 
-  // Market Intelligence
   const analyzeMarket = useCallback(() => {
     if (tickBuffer.current.length < 20) return null
     const buffer = tickBuffer.current
@@ -184,7 +186,6 @@ export function BotProvider({ children }: { children: React.ReactNode }) {
     }
   }, [settings.kMultiplier])
 
-  // Global Tick Stream
   useEffect(() => {
     let isSubscribed = true
     const setupTickSub = async () => {
@@ -192,23 +193,19 @@ export function BotProvider({ children }: { children: React.ReactNode }) {
             await derivAPI.unsubscribe(tickSubId.current)
             tickSubId.current = null
         }
-        tickSubId.current = await derivAPI.subscribeToTicks(settings.market, async (tick) => {
+        tickSubId.current = await derivAPI.subscribeToTicks(settings.market, (tick) => {
             if (!isSubscribed) return
             const price = Number(tick.quote)
             setLivePrice(price)
-            // Update tick buffer (max 1000)
             tickBuffer.current.push(price)
-            if (tickBuffer.current.length > 1000) tickBuffer.current.shift()
-            // Persist to localStorage
-            try {
-              localStorage.setItem(`derivex_ticks_${settings.market}`, JSON.stringify(tickBuffer.current))
-            } catch (e) { console.error('Failed to persist ticks', e) }
+            if (tickBuffer.current.length > 500) tickBuffer.current.shift()
+            
             const newMetrics = analyzeMarket()
             if (newMetrics) setMetrics(prev => ({ ...prev, ...newMetrics }))
-            // Also compute histogram and recent average
+            
             const hist = new Array(10).fill(0)
             tickBuffer.current.forEach(t => {
-              const digit = Math.floor(t) % 10
+              const digit = Math.floor(t * 100) % 10
               hist[digit]++
             })
             const avg = tickBuffer.current.reduce((a, b) => a + b, 0) / tickBuffer.current.length
@@ -222,7 +219,6 @@ export function BotProvider({ children }: { children: React.ReactNode }) {
     }
   }, [settings.market, analyzeMarket])
 
-  // Global Balance Stream
   useEffect(() => {
     let isSubscribed = true
     const setupBalanceSub = async () => {
@@ -243,70 +239,25 @@ export function BotProvider({ children }: { children: React.ReactNode }) {
     }
   }, [settings.activeAcct])
 
-  // Persistence Restoration Engine (Anti-Refresh Loss)
-  useEffect(() => {
-    const acct = localStorage.getItem("derivex_acct") || ""
-    if (acct.startsWith('VRTC')) {
-        const savedStats = localStorage.getItem(`derivex_stats_${acct}`)
-        const savedLogs = localStorage.getItem(`derivex_logs_${acct}`)
-        const savedHistory = localStorage.getItem(`derivex_history_${acct}`)
-        if (savedStats) setStats(JSON.parse(savedStats))
-        if (savedLogs) setLogs(JSON.parse(savedLogs))
-        if (savedHistory) setTradeHistory(JSON.parse(savedHistory))
-    }
-    isRestored.current = true
-  }, [])
-
-  // LocalStorage Sentinel (Demo Saving)
-  useEffect(() => {
-    if (isRestored.current && isDemo && stats.trades > 0) {
-        localStorage.setItem(`derivex_stats_${settings.activeAcct}`, JSON.stringify(stats))
-        localStorage.setItem(`derivex_logs_${settings.activeAcct}`, JSON.stringify(logs))
-        localStorage.setItem(`derivex_history_${settings.activeAcct}`, JSON.stringify(tradeHistory))
-    }
-  }, [isDemo, stats, logs, tradeHistory, settings.activeAcct])
-
-  // Authorization & Settings Synchronization
-  useEffect(() => {
-     const token = localStorage.getItem("derivex_token")
-     const acct = localStorage.getItem("derivex_acct")
-     const savedSettings = localStorage.getItem("derivex_bot_settings")
-     
-     if (savedSettings) {
-        try {
-            const parsed = JSON.parse(savedSettings)
-            setSettings(prev => ({ ...prev, ...parsed, activeToken: token || "", activeAcct: acct || "" }))
-        } catch (e) { console.error("Failed to restore settings", e) }
-     } else if (token && acct) {
-        setSettings(prev => ({ ...prev, activeToken: token, activeAcct: acct }))
-     }
-  }, [])
-
-  // Settings Saver
-  useEffect(() => {
-     if (settings.toolId) {
-        const { activeToken, activeAcct, ...rest } = settings
-        localStorage.setItem("derivex_bot_settings", JSON.stringify(rest))
-     }
-  }, [settings])
-
   const startBot = async () => {
     if (!settings.activeToken) {
         addLog('ERROR', 'No active account found. Please connect your broker.', 'ERROR')
         return
     }
     try {
-        addLog('AUTH', `Synchronizing and Authorizing ${settings.activeAcct}...`)
+        addLog('AUTH', `Synchronizing session for ${settings.activeAcct}...`)
         const authResp = await derivAPI.authorize(settings.activeToken)
         if (authResp.error) {
             addLog('ERROR', `Broker Refused: ${authResp.error.message}`, 'ERROR')
             return
         }
+        
+        consecutiveLosses.current = 0
+        currentMultiplier.current = 1
         addLog('START', `StatEngine Online. Monitoring ${settings.market}...`, 'SUCCESS')
         setState('SCANNING')
         stateRef.current = 'SCANNING'
 
-        // Real Session Archival
         if (!isDemo) {
             const { data: userData } = await supabase.auth.getUser()
             if (userData.user) {
@@ -343,41 +294,38 @@ export function BotProvider({ children }: { children: React.ReactNode }) {
   }
 
   const executeTrade = useCallback(async (computedBarrier: number) => {
-    // Anti-Rapid-Fire Guard (30s spacing)
     const now = Date.now()
-    if (now - lastTradeEndTime.current < 30000) return
+    if (now - lastTradeEndTime.current < 2000) return 
     if (stateRef.current !== 'SCANNING' || !livePrice) return
     
     try {
-      // Determine contract type based on mode
       let contractType: string
       let barrier: string
+      let duration = 2
+      let durationUnit: 'm' | 't' = 'm'
+
       if (settings.tradeMode === 'OVER_UNDER') {
-        if (livePrice > settings.overBarrier) {
-          contractType = 'CALL'
-          barrier = `${settings.overBarrier}`
-        } else if (livePrice < settings.underBarrier) {
-          contractType = 'PUT'
-          barrier = `${settings.underBarrier}`
-        } else {
-          // Price not beyond barriers, skip trade
-          return
-        }
+        contractType = settings.ouSide === 'UNDER' ? 'DIGITUNDER' : 'DIGITOVER'
+        barrier = String(settings.ouTarget !== undefined ? settings.ouTarget : (settings.ouSide === 'UNDER' ? 8 : 1))
+        duration = 1
+        durationUnit = 't'
+        addLog('ENTRY', `Digit Strategy: Placing 1-tick ${settings.ouSide} ${barrier} (Stake: ${(settings.stake * currentMultiplier.current).toFixed(2)})`, 'SUCCESS')
       } else {
         contractType = settings.tradeMode === 'TOUCH' ? 'ONETOUCH' : 'NOTOUCH'
         barrier = `+${computedBarrier.toFixed(2)}`
+        addLog('ENTRY', `Placing ${contractType} contract at barrier ${barrier}`, 'SUCCESS')
       }
       
-      addLog('ENTRY', `Placing ${contractType} contract at barrier ${barrier}`, 'SUCCESS')
-      
+      const stakeAmount = Number((settings.stake * currentMultiplier.current).toFixed(2))
+
       const resp = await derivAPI.buyContract({
         contractType,
         currency: 'USD',
-        amount: settings.stake,
-        duration: 2,
+        amount: stakeAmount,
+        duration: duration,
         symbol: settings.market,
         barrier,
-        duration_unit: 'm'
+        duration_unit: durationUnit
       })
 
       if (resp.error) {
@@ -402,20 +350,34 @@ export function BotProvider({ children }: { children: React.ReactNode }) {
           if (contract.is_sold) {
               const p = Number(contract.profit)
               const isWin = p > 0
+              
               setStats(prev => {
                   const nt = prev.trades + 1
                   const nw = isWin ? prev.wins + 1 : prev.wins
                   const nl = isWin ? prev.losses : prev.losses + 1
                   const np = prev.profit + p
+                  
+                  if (isWin) {
+                      consecutiveLosses.current = 0
+                      currentMultiplier.current = 1
+                  } else {
+                      consecutiveLosses.current++
+                      if (consecutiveLosses.current < settings.martingaleLevel) {
+                          currentMultiplier.current *= settings.martingaleMultiplier
+                      } else {
+                          consecutiveLosses.current = 0
+                          currentMultiplier.current = 1
+                      }
+                  }
+
                   return { trades: nt, wins: nw, losses: nl, profit: Number(np.toFixed(2)), winRate: Number(((nw / nt) * 100).toFixed(1)) }
               })
 
-              // Add to Detailed History
               const newTrade: Trade = {
                 id: tradeId,
                 symbol: settings.market,
                 type: settings.tradeMode,
-                stake: settings.stake,
+                stake: stakeAmount,
                 barrier: contract.barrier || '0',
                 entryPrice: Number(contract.entry_tick),
                 exitPrice: Number(contract.exit_tick),
@@ -423,52 +385,38 @@ export function BotProvider({ children }: { children: React.ReactNode }) {
                 result: isWin ? 'WIN' : 'LOSS',
                 timestamp: new Date().toISOString()
               }
-              setTradeHistory(prev => [newTrade, ...prev].slice(0, 50)) // Keep last 50
-
+              setTradeHistory(prev => [newTrade, ...prev].slice(0, 50))
               addLog('SETTLED', `Result: ${isWin ? '+' : ''}${p.toFixed(2)} on ${tradeId}`, isWin ? 'SUCCESS' : 'ERROR')
               
-              // Spacing reset
               lastTradeEndTime.current = Date.now()
               setCurrentTrade(null)
               setState('SCANNING')
               stateRef.current = 'SCANNING'
-
-              // Institutional Detailed Record-Keeping
-              if (!isDemo) {
-                  // Push to public social archive here if required
-              }
           }
       })
       setState('IN_TRADE')
       stateRef.current = 'IN_TRADE'
     } catch (err: any) {
       addLog('ERROR', err.message || 'Execution failed', 'ERROR')
-      // Apply recovery strategy
-      if (settings.recoveryStrategy === 'martingale') {
-        setSettings(prev => ({ ...prev, stake: prev.stake * 2 }))
-      } else if (settings.recoveryStrategy === 'fixed') {
-        setSettings(prev => ({ ...prev, stake: prev.stake + settings.recoveryStep }))
-      }
       setState('SCANNING')
       stateRef.current = 'SCANNING'
     }
-  }, [settings, livePrice, metrics, addLog, isDemo])
+  }, [settings, livePrice, metrics, addLog])
 
-  // Intelligence Loop
   useEffect(() => {
     if (state === 'SCANNING') {
         if (stats.trades >= settings.maxTrades) {
-            addLog('HALT', `Max trade limit (${settings.maxTrades}) reached for this session.`, 'WARNING')
+            addLog('HALT', `Limit (${settings.maxTrades}) reached.`, 'WARNING')
             stopBot()
             return
         }
         if (stats.profit >= settings.takeProfit) {
-            addLog('HALT', `Take Profit goal of $${settings.takeProfit} achieved.`, 'SUCCESS')
+            addLog('HALT', `Profit goal achieved.`, 'SUCCESS')
             stopBot()
             return
         }
         if (stats.profit <= -settings.stopLoss) {
-            addLog('HALT', `Stop Loss limit of -$${settings.stopLoss} hit.`, 'ERROR')
+            addLog('HALT', `Stop Loss limit hit.`, 'ERROR')
             stopBot()
             return
         }
@@ -477,15 +425,18 @@ export function BotProvider({ children }: { children: React.ReactNode }) {
             setState('COOLDOWN')
             stateRef.current = 'COOLDOWN'
             setCooldownTime(settings.cooldownDuration * 60)
-            addLog('COOLDOWN', `Milestone Reached. Cooling down for ${settings.cooldownDuration} minute(s).`, 'WARNING')
+            addLog('COOLDOWN', `Milestone Reached. Cooling down.`, 'WARNING')
             return
         }
-        // Over/Under logic
+        
         if (settings.tradeMode === 'OVER_UNDER') {
-            if (livePrice && livePrice > settings.overBarrier) {
-                executeTrade(settings.overBarrier)
-            } else if (livePrice && livePrice < settings.underBarrier) {
-                executeTrade(settings.underBarrier)
+            if (livePrice) {
+                const digit = parseInt(livePrice.toFixed(4).slice(-1))
+                if (settings.ouSide === 'OVER') {
+                    if (digit <= 1) executeTrade(0)
+                } else if (settings.ouSide === 'UNDER') {
+                    if (digit >= 8) executeTrade(0)
+                }
             }
         } else if (metrics.volatility > 0) {
             const isSafe = metrics.volatility < settings.volatilityThreshold
@@ -499,7 +450,6 @@ export function BotProvider({ children }: { children: React.ReactNode }) {
     }
   }, [state, stats, settings, cooldownTime, metrics, executeTrade, addLog, livePrice])
 
-  // Cooldown Timer
   useEffect(() => {
     let timer: any
     if (state === 'COOLDOWN' && cooldownTime > 0) {
@@ -521,14 +471,11 @@ export function BotProvider({ children }: { children: React.ReactNode }) {
       state, stats, currentTrade, logs, tradeHistory, cooldownTime, livePrice, metrics, settings,
       balance, currency,
       setSettings, startBot, stopBot, resetStats: () => {
-        if (isDemo) {
-           localStorage.removeItem(`derivex_stats_${settings.activeAcct}`)
-           localStorage.removeItem(`derivex_logs_${settings.activeAcct}`)
-           localStorage.removeItem(`derivex_history_${settings.activeAcct}`)
-           setStats({ trades: 0, wins: 0, losses: 0, profit: 0, winRate: 0 })
-           setLogs([])
-           setTradeHistory([])
-        }
+        setStats({ trades: 0, wins: 0, losses: 0, profit: 0, winRate: 0 })
+        setLogs([])
+        setTradeHistory([])
+        consecutiveLosses.current = 0
+        currentMultiplier.current = 1
       },
       closeTrade: () => addLog('HALT', 'Manual closure disabled for strategy integrity.', 'WARNING')
     }}>
