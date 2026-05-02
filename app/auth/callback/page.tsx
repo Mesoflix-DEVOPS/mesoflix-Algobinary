@@ -79,7 +79,8 @@ function AuthCallbackContent() {
         let primaryToken = ""
         let refreshToken = ""
         let tokenExpiry = 0
-        let authFlow: "legacy" | "new_v2" = "legacy"
+        const authFlow = "new_v2"
+
         
         if (code && stateParam) {
           // --- V2 Flow: OAuth 2.0 PKCE Exchange ---
@@ -119,48 +120,25 @@ function AuthCallbackContent() {
           localStorage.setItem("derivex_token", primaryToken)
           derivAPI.currentAuthFlow = "new_v2"
 
-          // --- Check if Deriv returned legacy account tokens alongside the V2 code ---
-          // When app_id is included in the auth URL, Deriv includes acct1/token1 params
-          // in the callback. These give us the real CR/VRTC account IDs directly.
-          const legacyAccounts: any[] = []
-          let i = 1
-          while (searchParams.get(`token${i}`)) {
-              legacyAccounts.push({
-                  token: searchParams.get(`token${i}`),
-                  account: searchParams.get(`acct${i}`),
-                  currency: searchParams.get(`cur${i}`) || "USD",
-                  isDemo: searchParams.get(`acct${i}`)?.startsWith("VRTC") || false
-              })
-              i++
-          }
-
-          if (legacyAccounts.length > 0) {
-              console.log("[Callback] Legacy account tokens found alongside V2 code:", legacyAccounts.map(a => a.account))
-              accountList.push(...legacyAccounts)
+          console.log("[Callback] Fetching V2 account list via REST...")
+          const listResponse = await derivAPI.getAccountList(primaryToken)
+          console.log("[Callback] V2 account list response:", listResponse)
+          if (listResponse?.account_list?.length > 0) {
+              accountList.push(...listResponse.account_list.map((acc: any) => ({
+                  token: primaryToken,
+                  account: acc.loginid,
+                  currency: acc.currency || "USD",
+                  isDemo: acc.account_type === "demo" || acc.is_virtual === 1
+              })))
+              // Prefer real account; demo accounts start with DOT, real with ROT
               const primary = accountList.find(a => !a.isDemo) || accountList[0]
               localStorage.setItem("derivex_acct", primary.account)
-              console.log("[Callback] Primary account set to:", primary.account)
+              console.log("[Callback] Primary account set to:", primary.account, "isDemo:", primary.isDemo)
           } else {
-              console.log("[Callback] No legacy tokens. Fetching V2 account list via REST...")
-              const listResponse = await derivAPI.getAccountList(primaryToken)
-              console.log("[Callback] V2 account list response:", listResponse)
-              if (listResponse?.account_list?.length > 0) {
-                  accountList.push(...listResponse.account_list.map((acc: any) => ({
-                      token: primaryToken,
-                      account: acc.loginid,
-                      currency: acc.currency || "USD",
-                      // V2 REST uses account_type field, not is_virtual
-                      isDemo: acc.account_type === "demo" || acc.is_virtual === 1
-                  })))
-                  // Prefer real account; demo accounts start with DOT, real with ROT
-                  const primary = accountList.find(a => !a.isDemo) || accountList[0]
-                  localStorage.setItem("derivex_acct", primary.account)
-                  console.log("[Callback] Primary account set to:", primary.account, "isDemo:", primary.isDemo)
-              } else {
-                  console.warn("[Callback] No accounts found. Will resolve after authorize().")
-                  accountList.push({ token: primaryToken, account: "UNKNOWN_V2", currency: "USD" })
-              }
+              console.warn("[Callback] No accounts found. Will resolve after authorize().")
+              accountList.push({ token: primaryToken, account: "UNKNOWN_V2", currency: "USD" })
           }
+
 
           sessionStorage.removeItem('oauth_state')
           sessionStorage.removeItem('pkce_code_verifier')
@@ -168,22 +146,9 @@ function AuthCallbackContent() {
           document.cookie = "pkce_code_verifier=; max-age=0; path=/"
 
         } else {
-          // --- Legacy Flow ---
-          let i = 1
-          while (searchParams.get(`token${i}`)) {
-            accountList.push({
-              token: searchParams.get(`token${i}`),
-              account: searchParams.get(`acct${i}`),
-              currency: searchParams.get(`cur${i}`) || "USD"
-            })
-            i++
-          }
-
-          if (accountList.length === 0) {
-            throw new Error("No authorization tokens found in redirect.")
-          }
-          primaryToken = accountList[0].token
+          throw new Error("No authorization code found in redirect. Unified login is disabled.")
         }
+
 
         await new Promise(r => setTimeout(r, 800)) // Animation buffer
         setStep(authFlow === "new_v2" ? "AUTHORIZING" : "CONNECTING")
@@ -202,13 +167,11 @@ function AuthCallbackContent() {
         await new Promise(r => setTimeout(r, 800))
         setStep("AUTHORIZING")
 
-        // 3. AUTHORIZING
-        // V2: authorize() will use derivex_acct (set above) to request an OTP and swap to the private socket
-        // Legacy: authorize() sends { authorize: token } over the WS
         const authResponse = await derivAPI.authorize(primaryToken)
         if (authResponse.error) {
           throw new Error(authResponse.error.message)
         }
+
 
         await new Promise(r => setTimeout(r, 800))
         setStep("SYNCING")
@@ -226,32 +189,20 @@ function AuthCallbackContent() {
             balance: 0
         }
 
-        if (authFlow === "legacy") {
-            try {
-                const settings = await derivAPI.getAccountSettings()
-                if (settings.get_settings) {
-                    userProfile.email = settings.get_settings.email
-                    userProfile.fullname = [settings.get_settings.first_name, settings.get_settings.last_name].filter(Boolean).join(" ")
-                }
-            } catch (e) {
-                console.warn("[Callback] Failed to fetch legacy settings:", e)
+
+        try {
+            const profileRes = await fetch(`/api/auth/deriv/userinfo`, {
+                headers: { "Authorization": `Bearer ${primaryToken}` }
+            })
+            if (profileRes.ok) {
+                const profile = await profileRes.json()
+                userProfile.email = profile.email
+                userProfile.fullname = profile.name || [profile.given_name, profile.family_name].filter(Boolean).join(" ")
             }
+        } catch (e) {
+            console.warn("[Callback] Could not fetch V2 userinfo:", e)
         }
 
-        if (authFlow === "new_v2") {
-            try {
-                const profileRes = await fetch(`/api/auth/deriv/userinfo`, {
-                    headers: { "Authorization": `Bearer ${primaryToken}` }
-                })
-                if (profileRes.ok) {
-                    const profile = await profileRes.json()
-                    userProfile.email = profile.email
-                    userProfile.fullname = profile.name || [profile.given_name, profile.family_name].filter(Boolean).join(" ")
-                }
-            } catch (e) {
-                console.warn("[Callback] Could not fetch V2 userinfo:", e)
-            }
-        }
 
         // Finalize Profile values
         if (!userProfile.fullname || userProfile.fullname.trim() === "") {
@@ -349,7 +300,8 @@ function AuthCallbackContent() {
             loginid: primaryAccountId,
             currency: primaryAccount.currency || "USD",
             balance: userProfile.balance,
-            profile_complete: authFlow === "legacy"
+            profile_complete: true
+
         }))
         localStorage.setItem("derivex_accounts", JSON.stringify(accountList))
         localStorage.setItem("derivex_auth_flow", authFlow)

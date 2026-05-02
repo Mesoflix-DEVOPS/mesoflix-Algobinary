@@ -36,23 +36,19 @@ class DerivAPI {
     
     // Default flow detection from localStorage
     if (typeof window !== "undefined") {
-        this.currentAuthFlow = (localStorage.getItem("derivex_auth_flow") as any) || "legacy"
+        this.currentAuthFlow = "new_v2"
     }
+
     
     // Choose endpoint based on known state or custom URL
     const token = typeof window !== "undefined" ? localStorage.getItem("derivex_token") : null
     let wsUrl = customWsUrl
     
     if (!wsUrl) {
-        if (token && this.isV2Token(token)) {
-            // V2 Tokens MUST use the v2 endpoint
-            wsUrl = "wss://api.derivws.com/trading/v1/options/ws/public"
-            this.currentAuthFlow = "new_v2"
-        } else {
-            // Legacy / Public use the stable legacy endpoint
-            wsUrl = `wss://ws.derivws.com/websockets/v3?app_id=${derivConfig.LEGACY_APP_ID}`
-        }
+        wsUrl = "wss://api.derivws.com/trading/v1/options/ws/public"
+        this.currentAuthFlow = "new_v2"
     }
+
     
     this.connectionPromise = new Promise((resolve, reject) => {
       try {
@@ -194,44 +190,39 @@ class DerivAPI {
   }
 
   async authorize(token: string): Promise<any> {
-    if (this.isV2Token(token)) {
-        // --- V2 OTP Flow (Backend Proxy) ---
-        // Browser fetch to api.derivws.com is blocked by CORS.
-        // We use our local backend route to fetch the authenticated OTP URL.
-        const activeAcct = typeof window !== "undefined" ? localStorage.getItem("derivex_acct") : null
-        if (!activeAcct) throw new Error("No active account for V2 authorization.")
-        
-        console.log("[DerivAPI] V2: Initiating OTP swap via backend proxy...")
-        try {
-            const res = await fetch(`/api/auth/deriv/otp`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ accountId: activeAcct, token })
-            })
-            if (!res.ok) {
-                const errData = await res.json().catch(() => ({}))
-                throw new Error(errData.error || "OTP swap failed.")
-            }
-            
-            const data = await res.json()
-            const authenticatedWsUrl = data.ws_url
-            if (!authenticatedWsUrl) throw new Error("No authenticated WebSocket URL returned.")
-            
-            // Swap to the authenticated WebSocket session
-            console.log("[DerivAPI] V2: OTP Swap successful. Migrating connection...")
-            this.intentionalDisconnect = true
-            this.ws?.close() 
-            await this.connect(authenticatedWsUrl, true)
-            return { authorize: { loginid: activeAcct } }
-        } catch (e: any) {
-            console.error("[DerivAPI] V2 Auth Failed:", e)
-            return { error: { message: e.message } }
+    // --- V2 OTP Flow (Backend Proxy) ---
+    const activeAcct = typeof window !== "undefined" ? localStorage.getItem("derivex_acct") : null
+    if (!activeAcct) throw new Error("No active account for V2 authorization.")
+    
+    console.log("[DerivAPI] V2: Initiating OTP swap via backend proxy...")
+    try {
+        const res = await fetch(`/api/auth/deriv/otp`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ accountId: activeAcct, token })
+        })
+        if (!res.ok) {
+            const errData = await res.json().catch(() => ({}))
+            throw new Error(errData.error || "OTP swap failed.")
         }
-    } else {
-        // --- Legacy Path ---
-        return this.send({ authorize: token })
+        
+        const data = await res.json()
+        // Deriv V2 OTP Response field is 'url' or 'ws_url'
+        const authenticatedWsUrl = data.url || data.ws_url
+        if (!authenticatedWsUrl) throw new Error("No authenticated WebSocket URL returned.")
+        
+        // Swap to the authenticated WebSocket session
+        console.log("[DerivAPI] V2: OTP Swap successful. Migrating connection...")
+        this.intentionalDisconnect = true
+        this.ws?.close() 
+        await this.connect(authenticatedWsUrl, true)
+        return { authorize: { loginid: activeAcct } }
+    } catch (e: any) {
+        console.error("[DerivAPI] V2 Auth Failed:", e)
+        return { error: { message: e.message } }
     }
   }
+
 
   async getAccountSettings(): Promise<any> {
     return this.send({ get_settings: 1 })
@@ -239,38 +230,37 @@ class DerivAPI {
 
   async getAccountList(token?: string): Promise<any> {
     const activeToken = token || (typeof window !== "undefined" ? localStorage.getItem("derivex_token") : null)
-    if (activeToken && this.isV2Token(activeToken)) {
-        try {
-            console.log("[DerivAPI] Fetching V2 account list via proxy...")
-            const res = await fetch("/api/auth/deriv/accounts", {
-                method: "GET",
-                headers: {
-                    "Authorization": `Bearer ${activeToken}`
-                }
-            })
-            if (!res.ok) {
-                const errData = await res.json().catch(() => ({}))
-                return { error: { message: errData.error || "List Failed" } }
+    if (!activeToken) return { error: { message: "No token available" } }
+    
+    try {
+        console.log("[DerivAPI] Fetching V2 account list via proxy...")
+        const res = await fetch("/api/auth/deriv/accounts", {
+            method: "GET",
+            headers: {
+                "Authorization": `Bearer ${activeToken}`
             }
-            const data = await res.json()
-            const accounts = data.data || []
-            return {
-                account_list: accounts.map((acct: any) => ({
-                    loginid: acct.account_id || acct.id || acct.loginid,
-                    is_virtual: acct.account_type === "demo" ? 1 : 0,
-                    currency: acct.currency || "USD",
-                    token: activeToken,
-                    // Map balance for the syncBalances efficiency
-                    balance: acct.balance || 0
-                }))
-            }
-        } catch (e: any) {
-            return { error: { message: e.message } }
+        })
+        if (!res.ok) {
+            const errData = await res.json().catch(() => ({}))
+            return { error: { message: errData.error || "List Failed" } }
         }
-    } else {
-        return this.send({ account_list: 1 })
+        const data = await res.json()
+        const accounts = data.data || []
+        return {
+            account_list: accounts.map((acct: any) => ({
+                loginid: acct.account_id || acct.id || acct.loginid,
+                is_virtual: acct.account_type === "demo" ? 1 : 0,
+                currency: acct.currency || "USD",
+                token: activeToken,
+                // Map balance for the syncBalances efficiency
+                balance: acct.balance || 0
+            }))
+        }
+    } catch (e: any) {
+        return { error: { message: e.message } }
     }
   }
+
 
   async getSyntheticMarkets(): Promise<any[]> {
     const resp = await this.send({ active_symbols: "brief" })

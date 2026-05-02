@@ -61,40 +61,20 @@ export function TopNavbar() {
       const currentBalances: Record<string, string> = { ...balances }
 
       try {
-          const authFlow = localStorage.getItem("derivex_auth_flow")
-          const originalToken = localStorage.getItem("derivex_token")
-          
-          if (authFlow === "new_v2") {
-              // --- V2 Optimized Flow ---
-              // Use the REST proxy to get all balances in one shot, avoiding socket churning.
-              console.log("[TopNavbar] V2 Sync: Fetching all balances via REST proxy...")
-              const resp = await derivAPI.getAccountList()
-              if (resp.account_list) {
-                  resp.account_list.forEach((acct: any) => {
-                      currentBalances[acct.loginid] = parseFloat(acct.balance).toLocaleString(undefined, {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2
-                      })
+
+          // --- V2 Optimized Flow ---
+          // Use the REST proxy to get all balances in one shot, avoiding socket churning.
+          console.log("[TopNavbar] V2 Sync: Fetching all balances via REST proxy...")
+          const resp = await derivAPI.getAccountList()
+          if (resp.account_list) {
+              resp.account_list.forEach((acct: any) => {
+                  currentBalances[acct.loginid] = parseFloat(acct.balance).toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2
                   })
-              }
-          } else {
-              // --- Legacy Flow ---
-              await derivAPI.connect()
-              for (const acct of accountList) {
-                  try {
-                      const resp = await derivAPI.authorize(acct.token)
-                      if (resp.authorize) {
-                          currentBalances[acct.account] = parseFloat(resp.authorize.balance).toLocaleString(undefined, {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2
-                          })
-                      }
-                  } catch (e) {
-                      console.warn(`[TopNavbar] Legacy sync failed for ${acct.account}`)
-                  }
-              }
-              if (originalToken) await derivAPI.authorize(originalToken)
+              })
           }
+
 
           setBalances(currentBalances)
       } catch (err) {

@@ -42,10 +42,11 @@ export async function POST(req: Request) {
     const data = await response.json()
     console.log("[API/OTP] Deriv Response:", data)
 
-    // The response schema from Deriv: { "ws_url": "wss://.../?otp=..." }
-    if (!data.ws_url) {
-      console.warn("[API/OTP] Missing ws_url in Deriv response. Whole response:", JSON.stringify(data))
+    // The response schema from Deriv can use 'url' or 'ws_url'
+    if (!data.url && !data.ws_url) {
+      console.warn("[API/OTP] Missing authenticated URL in Deriv response. Whole response:", JSON.stringify(data))
     }
+
 
     return NextResponse.json(data)
 
