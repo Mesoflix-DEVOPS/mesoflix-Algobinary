@@ -40,12 +40,14 @@ export async function POST(req: Request) {
     }
 
     const data = await response.json()
-    console.log("[API/OTP] Deriv Response:", data)
+    console.log("[API/OTP] Deriv Response:", JSON.stringify(data))
 
-    // The response schema from Deriv can use 'url' or 'ws_url'
-    if (!data.url && !data.ws_url) {
-      console.warn("[API/OTP] Missing authenticated URL in Deriv response. Whole response:", JSON.stringify(data))
+    // The response schema from Deriv: { data: { url: "..." } }
+    const url = data.data?.url || data.data?.ws_url || data.url || data.ws_url
+    if (!url) {
+      console.warn("[API/OTP] Missing authenticated URL in Deriv response structure.")
     }
+
 
 
     return NextResponse.json(data)

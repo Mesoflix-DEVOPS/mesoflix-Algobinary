@@ -207,9 +207,13 @@ class DerivAPI {
         }
         
         const data = await res.json()
-        // Deriv V2 OTP Response field is 'url' or 'ws_url'
-        const authenticatedWsUrl = data.url || data.ws_url
-        if (!authenticatedWsUrl) throw new Error("No authenticated WebSocket URL returned.")
+        // Deriv V2 OTP Response structure: { data: { url: "..." } }
+        const authenticatedWsUrl = data.data?.url || data.data?.ws_url || data.url || data.ws_url
+        if (!authenticatedWsUrl) {
+            console.error("[DerivAPI] Invalid OTP response structure:", data)
+            throw new Error("No authenticated WebSocket URL returned.")
+        }
+
         
         // Swap to the authenticated WebSocket session
         console.log("[DerivAPI] V2: OTP Swap successful. Migrating connection...")
