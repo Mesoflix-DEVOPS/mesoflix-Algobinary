@@ -172,8 +172,9 @@ class DerivAPI {
             // Standard Deriv heartbeat format
             this.ws.send(JSON.stringify({ ping: 1 }))
         }
-    }, 15000)
+    }, 30000)
   }
+
 
   disconnect() {
       this.intentionalDisconnect = true
@@ -293,14 +294,23 @@ class DerivAPI {
   }
 
 
-  async getSyntheticMarkets(): Promise<any[]> {
-    const resp = await this.send({ active_symbols: "brief" })
-    if (!resp.active_symbols) return []
-    return resp.active_symbols.filter((s: any) => 
-        (s.market === 'synthetic_index' || s.submarket === 'volatility_indices' || s.submarket === 'jump_indices') 
-        && s.exchange_is_open === 1
-    )
+  async getActiveSymbols(category: string = "synthetic_index"): Promise<any[]> {
+    const resp = await this.send({ active_symbols: "brief", product_type: "basic" })
+    if (resp.error) throw new Error(resp.error.message)
+    let symbols = resp.active_symbols || []
+    if (category) {
+        symbols = symbols.filter((s: any) => (s.market === category || s.submarket === category) && s.exchange_is_open === 1)
+    }
+    return symbols
   }
+
+  async subscribeToTicks(symbol: string, onTick: (data: any) => void): Promise<number | null> {
+    const request = { ticks: symbol, subscribe: 1 }
+    return this.createMultiplexedSub(request, (data) => {
+        if (data.tick) onTick(data.tick)
+    })
+  }
+
 
   async buyContract(params: {
     contractType: string

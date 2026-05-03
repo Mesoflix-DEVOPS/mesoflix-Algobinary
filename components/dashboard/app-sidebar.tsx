@@ -90,24 +90,24 @@ export function AppSidebar() {
   ]
 
   return (
-    <Sidebar collapsible="icon" className="border-r border-white/5 bg-black">
-      <SidebarHeader className="h-16 flex items-center px-6 border-b border-white/5">
+    <Sidebar collapsible="icon" className="border-r border-white/10 bg-[#020202] shadow-2xl">
+      <SidebarHeader className="h-16 flex items-center px-6 border-b border-white/5 bg-[#050505]">
         <Link href="/" className="flex items-center gap-2 group">
-          <div className="w-8 h-8 rounded-lg bg-teal-500 flex items-center justify-center shadow-[0_0_15px_rgba(20,184,166,0.5)] group-hover:scale-110 transition-transform">
+          <div className="w-8 h-8 rounded-lg bg-teal-500 flex items-center justify-center shadow-[0_0_20px_rgba(20,184,166,0.6)] group-hover:scale-110 transition-transform">
             <Zap className="w-5 h-5 text-black fill-black" />
           </div>
           {state === "expanded" && (
             <div className="flex flex-col">
               <span className="font-bold text-lg tracking-tight text-white">Derivex</span>
-              <span className="text-[10px] text-teal-500 font-medium -mt-1 uppercase tracking-widest">by Mesoflix</span>
+              <span className="text-[10px] text-teal-500 font-black -mt-1 uppercase tracking-[0.3em]">Institutional</span>
             </div>
           )}
         </Link>
       </SidebarHeader>
 
-      <SidebarContent className="px-2 py-4 custom-scrollbar">
+      <SidebarContent className="px-2 py-4 custom-scrollbar bg-[#020202]">
         <SidebarGroup>
-          <SidebarGroupLabel className="text-gray-500 px-4 mb-2">Main Navigation</SidebarGroupLabel>
+          <SidebarGroupLabel className="text-gray-600 px-4 mb-2 uppercase text-[10px] font-black tracking-widest">Main Operations</SidebarGroupLabel>
           <SidebarMenu>
             {mainNav.map((item) => (
               <SidebarMenuItem key={item.title}>
@@ -115,14 +115,14 @@ export function AppSidebar() {
                   asChild
                   isActive={pathname === item.href}
                   className={cn(
-                    "hover:bg-white/5 transition-colors",
-                    pathname === item.href ? "text-teal-400 bg-teal-500/10" : "text-gray-400"
+                    "hover:bg-white/5 transition-all duration-300 h-11 px-4 rounded-lg group",
+                    pathname === item.href ? "text-teal-400 bg-teal-500/10 border border-teal-500/20" : "text-gray-500"
                   )}
                   tooltip={item.title}
                 >
                   <Link href={item.href} onClick={handleLinkClick}>
-                    <item.icon className="w-5 h-5" />
-                    <span>{item.title}</span>
+                    <item.icon className={cn("w-5 h-5 transition-transform group-hover:scale-110", pathname === item.href && "text-teal-400")} />
+                    <span className="font-bold tracking-tight">{item.title}</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -130,54 +130,30 @@ export function AppSidebar() {
           </SidebarMenu>
         </SidebarGroup>
 
-          <SidebarGroup>
-            <SidebarGroupLabel className="text-gray-500 px-4 mb-2">Trading Tools</SidebarGroupLabel>
-            <SidebarMenu>
-              {/* Dynamically render all tools fetched from Supabase */}
-              {tools.map((tool) => (
-                <SidebarMenuItem key={tool.id}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={pathname.includes(`/tool/${tool.id}`)}
-                    className={cn(
-                      "hover:bg-white/5 transition-colors",
-                      pathname.includes(`/tool/${tool.id}`) ? "text-teal-400 bg-teal-500/10" : "text-gray-400"
-                    )}
-                    tooltip={tool.name}
-                  >
-                    <Link href={`/tool/${tool.id}`} onClick={handleLinkClick} className="flex items-center justify-between w-full">
-                      <div className="flex items-center gap-2">
-                        <Circle className="w-2 h-2 fill-teal-500 text-teal-500 shadow-[0_0_8px_rgba(20,184,166,0.8)]" />
-                        <span className="font-bold">{tool.name}</span>
-                      </div>
-                      {state === "expanded" && <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />}
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroup>
-
         <SidebarGroup>
-          <SidebarGroupLabel className="text-gray-500 px-4 mb-2">Insights</SidebarGroupLabel>
+          <SidebarGroupLabel className="text-gray-600 px-4 mb-2 uppercase text-[10px] font-black tracking-widest">Market Intelligence</SidebarGroupLabel>
           <SidebarMenu>
             {insightNav.map((item) => (
               <SidebarMenuItem key={item.title}>
                 <SidebarMenuButton
                   asChild
                   isActive={pathname === item.href}
-                  className="text-gray-400 hover:bg-white/5"
+                  className={cn(
+                    "hover:bg-white/5 transition-all duration-300 h-11 px-4 rounded-lg group",
+                    pathname === item.href ? "text-teal-400 bg-teal-500/10 border border-teal-500/20" : "text-gray-500"
+                  )}
                   tooltip={item.title}
                 >
                   <Link href={item.href} onClick={handleLinkClick}>
-                    <item.icon className="w-5 h-5" />
-                    <span>{item.title}</span>
+                    <item.icon className="w-5 h-5 transition-transform group-hover:scale-110" />
+                    <span className="font-bold tracking-tight">{item.title}</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             ))}
           </SidebarMenu>
         </SidebarGroup>
+
 
         <SidebarGroup>
           <SidebarGroupLabel className="text-gray-500 px-4 mb-2">System</SidebarGroupLabel>

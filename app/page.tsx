@@ -50,33 +50,33 @@ export default function Home() {
                 <span className="text-teal-500">Deriv</span>ex
               </h1>
               <p className="text-xl md:text-2xl text-gray-300 mb-6">
-                Automate binary trading globally
+                Premium Market Intelligence for Synthetic Indices
               </p>
-              <p className="text-lg md:text-xl text-gray-400 mb-8">
-                Choose a tool, not a strategy. Select from proven automated trading solutions and start earning instantly.
+              <p className="text-lg md:text-xl text-gray-400 mb-8 font-medium">
+                High-fidelity telemetry, real-time digit distribution, and institutional-grade analytics for global options traders.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center pointer-events-auto">
                 {isLoggedIn ? (
                   <Button
-                    className="bg-teal-500 hover:bg-teal-600 text-black font-bold px-8 py-6 text-lg rounded-xl shadow-[0_0_20px_rgba(20,184,166,0.5)] transition-all hover:scale-105"
+                    className="bg-teal-500 hover:bg-teal-600 text-black font-black px-10 py-7 text-lg rounded-2xl shadow-[0_0_30px_rgba(20,184,166,0.4)] transition-all hover:scale-105 uppercase tracking-widest"
                     onClick={() => router.push("/dashboard")}
                   >
-                    Go to Dashboard
+                    Enter Command Center
                   </Button>
                 ) : (
                   <>
                     <Button
-                      className="bg-teal-500 hover:bg-teal-600 text-black font-bold px-8 py-6 text-lg rounded-xl shadow-[0_0_20px_rgba(20,184,166,0.5)] transition-all hover:scale-105"
+                      className="bg-teal-500 hover:bg-teal-600 text-black font-black px-10 py-7 text-lg rounded-2xl shadow-[0_0_30px_rgba(20,184,166,0.4)] transition-all hover:scale-105 uppercase tracking-widest"
                       onClick={() => router.push("/login")}
                     >
-                      Login with Deriv
+                      Authenticate Now
                     </Button>
                     <Button
                       variant="outline"
-                      className="border-teal-500 text-teal-500 hover:bg-teal-900/20 px-8 py-6 text-lg rounded-xl transition-all"
+                      className="border-white/10 text-white hover:bg-white/5 px-10 py-7 text-lg rounded-2xl transition-all uppercase tracking-widest font-bold backdrop-blur-sm"
                       onClick={() => router.push("/login")}
                     >
-                      Get Started
+                      View Live Markets
                     </Button>
                   </>
                 )}
@@ -88,50 +88,37 @@ export default function Home() {
                 <div className="flex gap-6 whitespace-nowrap md:flex-wrap md:justify-center md:gap-8">
                   <Button
                     variant="link"
-                    className="text-white hover:text-teal-400 pointer-events-auto flex-shrink-0"
+                    className="text-gray-400 hover:text-teal-400 pointer-events-auto flex-shrink-0 uppercase text-[10px] font-black tracking-[0.2em]"
                     onClick={() => router.push("/login")}
                   >
-                    Login
+                    Security
                   </Button>
                   <Button
                     variant="link"
-                    className="text-white hover:text-teal-400 pointer-events-auto flex-shrink-0"
-                    onClick={() => router.push("/studio")}
-                  >
-                    Tools
-                  </Button>
-                  <Button
-                    variant="link"
-                    className="text-white hover:text-teal-400 pointer-events-auto flex-shrink-0"
-                    onClick={() => router.push("/backtest")}
-                  >
-                    Performance
-                  </Button>
-                  <Button
-                    variant="link"
-                    className="text-white hover:text-teal-400 pointer-events-auto flex-shrink-0"
+                    className="text-gray-400 hover:text-teal-400 pointer-events-auto flex-shrink-0 uppercase text-[10px] font-black tracking-[0.2em]"
                     onClick={() => router.push("/trading")}
                   >
-                    Dashboard
+                    Markets
                   </Button>
                   <Button
                     variant="link"
-                    className="text-white hover:text-teal-400 pointer-events-auto flex-shrink-0"
+                    className="text-gray-400 hover:text-teal-400 pointer-events-auto flex-shrink-0 uppercase text-[10px] font-black tracking-[0.2em]"
+                    onClick={() => router.push("/dashboard")}
+                  >
+                    Telemetry
+                  </Button>
+                  <Button
+                    variant="link"
+                    className="text-gray-400 hover:text-teal-400 pointer-events-auto flex-shrink-0 uppercase text-[10px] font-black tracking-[0.2em]"
                     onClick={() => router.push("/community")}
                   >
-                    Leaderboard
-                  </Button>
-                  <Button
-                    variant="link"
-                    className="text-white hover:text-teal-400 pointer-events-auto flex-shrink-0"
-                    onClick={() => router.push("/strategy")}
-                  >
-                    Activity
+                    Community
                   </Button>
                 </div>
               </div>
             </div>
           </div>
+
         </>
       )}
     </main>

@@ -164,130 +164,99 @@ export default function DashboardPage() {
       </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* LEFT & CENTER: ACTIVE PANEL + TOOLS */}
+        {/* LEFT & CENTER: ACTIVE PANEL + MARKETS */}
         <div className="lg:col-span-2 space-y-8">
+
           
-          {/* B. ACTIVE TOOL PANEL */}
-          <Card className="bg-zinc-900/50 border-white/5 backdrop-blur-sm overflow-hidden border-l-4 border-l-teal-500">
+          {/* B. SYSTEM STATUS PANEL */}
+          <Card className="bg-[#050505] border-white/5 backdrop-blur-sm overflow-hidden border-l-4 border-l-teal-500 shadow-2xl">
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-lg font-bold text-white flex items-center gap-2">
-                  <Activity className="w-5 h-5 text-teal-400" />
-                  Active Trading Session
+                  <Radar className="w-5 h-5 text-teal-400" />
+                  Network Status
                 </CardTitle>
-                <Badge className="bg-gray-800 text-gray-400">Idle</Badge>
+                <Badge className="bg-teal-500/10 text-teal-500 border-none uppercase text-[9px] font-black tracking-widest">Active Sync</Badge>
               </div>
             </CardHeader>
             <CardContent className="pt-4">
-              <div className="flex flex-col items-center justify-center min-h-[160px] text-center rounded-2xl bg-black/20 border border-white/5 relative overflow-hidden">
-                {state === 'IDLE' || state === 'STOPPED' ? (
-                  <>
-                    <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mb-4">
-                       <Zap className="w-6 h-6 text-gray-600" />
-                    </div>
-                    <h3 className="text-gray-300 font-semibold uppercase tracking-tighter">No active tool currently running</h3>
-                    <p className="text-[10px] text-gray-500 mt-1 max-w-[200px] uppercase font-bold tracking-widest">Select a tool below to initialize the neural engine</p>
-                  </>
-                ) : (
-                  <div className="w-full h-full p-6 flex items-center justify-between">
-                     <div className="flex flex-col items-start gap-1">
-                        <span className="text-[10px] font-black text-teal-500 uppercase tracking-widest">Algorithm Status</span>
+              <div className="flex flex-col md:flex-row items-center gap-8 p-6 rounded-2xl bg-black/20 border border-white/5 relative overflow-hidden">
+                <div className="flex-1 space-y-4">
+                    <div className="space-y-1">
+                        <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Data Integrity</span>
                         <div className="flex items-center gap-2">
-                           <div className="w-2 h-2 rounded-full bg-teal-500 animate-pulse" />
-                           <span className="text-xl font-black text-white uppercase">{state}</span>
+                            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                            <span className="text-xl font-black text-white uppercase tracking-tighter">Verified Stream</span>
                         </div>
-                        {currentTrade && (
-                           <div className="mt-4 flex flex-col items-start">
-                              <span className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">Active Trade P/L</span>
-                              <span className={cn(
-                                "text-2xl font-black",
-                                currentTrade.profit >= 0 ? "text-green-400" : "text-red-400"
-                              )}>
-                                {currentTrade.profit > 0 ? '+' : ''}{currentTrade.profit.toFixed(2)}
-                              </span>
-                           </div>
-                        )}
-                     </div>
+                    </div>
+                    <p className="text-[10px] text-gray-500 uppercase font-bold tracking-widest leading-relaxed max-w-sm">
+                        Direct low-latency WebSocket connection established with Deriv V2 infrastructure. Telemetry packets are being parsed at 10ms intervals.
+                    </p>
+                </div>
 
-                     <div className="flex flex-col items-end gap-1">
-                        <div className="p-3 rounded-xl bg-white/5 border border-white/5 grid grid-cols-2 gap-4">
-                           <div className="flex flex-col items-end">
-                              <span className="text-[10px] text-gray-500 font-bold uppercase">Wins</span>
-                              <span className="text-sm font-black text-green-400">{stats.wins}</span>
-                           </div>
-                           <div className="flex flex-col items-end">
-                              <span className="text-[10px] text-gray-500 font-bold uppercase">Losses</span>
-                              <span className="text-sm font-black text-red-400">{stats.losses}</span>
-                           </div>
-                        </div>
-                        <Link href="/tool/session-trader">
-                           <Button size="sm" variant="outline" className="mt-2 text-[9px] h-7 border-teal-500/20 text-teal-500 uppercase font-black hover:bg-teal-500/10">
-                              View Full Diagnostic
-                           </Button>
-                        </Link>
-                     </div>
-                     
-                     <Radar className="absolute -right-4 -bottom-4 w-32 h-32 text-teal-500/10 animate-spin-slow pointer-events-none" />
-                  </div>
-                )}
+                <div className="flex gap-4">
+                    <Link href="/trading">
+                        <Button className="bg-teal-500 hover:bg-teal-600 text-black font-black uppercase text-[10px] tracking-widest px-6 h-10 rounded-lg">
+                            Launch Pulse
+                        </Button>
+                    </Link>
+                    <Button variant="outline" className="border-white/10 text-white font-black uppercase text-[10px] tracking-widest px-6 h-10 rounded-lg">
+                        Diagnostic
+                    </Button>
+                </div>
+                
+                <Activity className="absolute -right-4 -bottom-4 w-32 h-32 text-teal-500/5 pointer-events-none" />
               </div>
             </CardContent>
           </Card>
 
-          {/* D. TOOL CARDS (MARKETPLACE) */}
+          {/* D. MARKET PULSE (PREVIEW) */}
           <div className="space-y-4">
             <div className="flex items-center justify-between px-2">
-              <h2 className="text-xl font-bold text-white flex items-center gap-2">
+              <h2 className="text-xl font-black text-white flex items-center gap-2 uppercase tracking-tighter">
                 <LayoutGrid className="w-5 h-5 text-teal-500" />
-                Tools Marketplace
+                Live Market Nodes
               </h2>
-              <Link href="/studio" className="text-sm text-teal-500 font-bold hover:underline">View All Tools</Link>
+              <Link href="/trading" className="text-[10px] text-teal-500 font-black hover:underline uppercase tracking-widest">View Full Matrix</Link>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {isLoading ? (
-                [1, 2].map(i => <div key={i} className="h-48 rounded-2xl bg-white/5 animate-pulse" />)
-              ) : (
-                tools.map(tool => (
-                  <Card key={tool.id} className="group bg-zinc-900/30 border-white/5 hover:border-teal-500/50 transition-all duration-300 overflow-hidden relative">
+                {[
+                    { name: "Volatility 100 Index", id: "R_100", volatility: "Extreme" },
+                    { name: "Volatility 75 (1s) Index", id: "1s_75", volatility: "High" }
+                ].map(market => (
+                  <Card key={market.id} className="group bg-[#080808] border-white/5 hover:border-teal-500/50 transition-all duration-300 overflow-hidden relative shadow-xl">
                      <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-                        <Zap className="w-24 h-24 text-white" />
+                        <LineChart className="w-24 h-24 text-white" />
                      </div>
                      <CardHeader className="pb-2 relative z-10">
                         <div className="flex justify-between items-start">
-                          <Badge variant="secondary" className="bg-teal-500/10 text-teal-500 border-none text-[10px] font-bold uppercase tracking-wider">
-                            {tool.category}
+                          <Badge variant="secondary" className="bg-teal-500/10 text-teal-500 border-none text-[9px] font-black uppercase tracking-widest">
+                            Synthetic Node
                           </Badge>
-                          <div className="flex items-center gap-1 text-green-500 font-mono text-sm font-bold">
-                            <ArrowUpRight className="w-4 h-4" />
-                            {tool.win_rate}%
+                          <div className="text-[9px] font-black uppercase text-gray-600 tracking-widest">
+                            Vol: {market.volatility}
                           </div>
                         </div>
-                        <CardTitle className="text-xl font-bold text-white mt-2">{tool.name}</CardTitle>
-                        <CardDescription className="text-gray-400 line-clamp-2 text-xs leading-relaxed">
-                          {tool.description}
+                        <CardTitle className="text-xl font-black text-white mt-2 uppercase tracking-tighter">{market.name}</CardTitle>
+                        <CardDescription className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mt-1">
+                          Node {market.id} active and streaming telemetry
                         </CardDescription>
                      </CardHeader>
-                     <CardContent className="relative z-10 mt-2">
-                        <div className="flex items-center justify-between border-t border-white/5 pt-4">
-                          <div className="flex items-center gap-2">
-                            <Users className="w-4 h-4 text-gray-500" />
-                            <span className="text-xs text-gray-400 font-medium">{tool.total_users.toLocaleString()} traders</span>
-                          </div>
-                          <Link href={`/tool/${tool.id}`}>
-                            <Button size="sm" className="bg-white/5 hover:bg-teal-500 hover:text-black text-white font-bold border border-white/10 group-hover:border-teal-500/50 transition-all">
-                              <Play className="mr-2 w-3 h-3 fill-current" />
-                              Open Tool
+                     <CardContent className="relative z-10 mt-4 border-t border-white/5 pt-4 flex items-center justify-between">
+                        <span className="text-[9px] font-black text-teal-500/50 uppercase tracking-[0.2em]">Live Data Active</span>
+                        <Link href={`/trading/${market.id}`}>
+                            <Button size="sm" className="bg-white/5 hover:bg-teal-500 hover:text-black text-white font-black border-none text-[9px] uppercase tracking-widest px-4 transition-all h-8 rounded-md">
+                                Analyze
                             </Button>
-                          </Link>
-                        </div>
+                        </Link>
                      </CardContent>
                   </Card>
-                ))
-              )}
+                ))}
             </div>
           </div>
         </div>
+
 
         {/* RIGHT: LIVE ACTIVITY + STATS */}
         <div className="space-y-8">
