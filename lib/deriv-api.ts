@@ -15,6 +15,7 @@ class DerivAPI {
   private responseHandlers: Map<number, { resolve: (data: any) => void, reject: (err: any) => void }> = new Map()
   private subscriptionRegistry: Map<string, Subscription> = new Map()
   private idToSubKey: Map<number, string> = new Map()
+  private serverSubIdToSubKey: Map<string, string> = new Map()
   private isConnected = false
   private pingInterval: any = null
   private connectionPromise: Promise<void> | null = null
@@ -112,16 +113,22 @@ class DerivAPI {
       }
 
       const reqId = data.req_id
-      const subKey = this.idToSubKey.get(reqId)
+      const serverSubId = data.subscription?.id || data.tick?.id || data.balance?.id || data.proposal_open_contract?.id
+      
+      let subKey = reqId ? this.idToSubKey.get(reqId) : null
+      
+      // If no req_id, try to find subKey via server-side subscription ID
+      if (!subKey && serverSubId) {
+          subKey = this.serverSubIdToSubKey.get(serverSubId)
+      }
+
       if (subKey) {
           const sub = this.subscriptionRegistry.get(subKey)
-          // Store the server-provided subscription ID if available
-          const serverSubId = data.subscription?.id || data.tick?.id || data.balance?.id
-          if (serverSubId && sub) {
-              (sub as any).serverSubId = serverSubId
+          if (sub && serverSubId && !this.serverSubIdToSubKey.has(serverSubId)) {
+              this.serverSubIdToSubKey.set(serverSubId, subKey)
+              ;(sub as any).serverSubId = serverSubId
           }
           sub?.callbacks.forEach(cb => cb(data))
-          return
       }
 
       if (reqId && this.responseHandlers.has(reqId)) {
@@ -191,7 +198,6 @@ class DerivAPI {
       const payload = { ...message, req_id: msgId }
       this.responseHandlers.set(msgId, { resolve, reject })
       try {
-        console.log("[DerivAPI] Sending:", JSON.stringify(payload))
         socket.send(JSON.stringify(payload))
       } catch (error) {
         this.responseHandlers.delete(msgId)
@@ -201,7 +207,6 @@ class DerivAPI {
   }
 
   async authorize(token: string): Promise<any> {
-    // --- V2 OTP Flow (Backend Proxy) ---
     const activeAcct = typeof window !== "undefined" ? localStorage.getItem("derivex_acct") : null
     if (!activeAcct) throw new Error("No active account for V2 authorization.")
     
@@ -224,7 +229,6 @@ class DerivAPI {
             throw new Error("No authenticated WebSocket URL returned.")
         }
 
-        // Swap to the authenticated WebSocket session
         console.log("[DerivAPI] V2: OTP Swap successful. Migrating connection...")
         
         if (this.ws) {
