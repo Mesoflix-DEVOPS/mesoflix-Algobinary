@@ -167,12 +167,14 @@ class DerivAPI {
   }
 
   private startHeartbeat() {
+    // Temporarily disabled to identify UnrecognisedRequest source
+    /*
     this.pingInterval = setInterval(() => {
         if (this.isConnected && this.ws?.readyState === WebSocket.OPEN) {
-            // Standard Deriv heartbeat format
             this.ws.send(JSON.stringify({ ping: 1 }))
         }
     }, 30000)
+    */
   }
 
 
@@ -201,6 +203,7 @@ class DerivAPI {
       const payload = { ...message, req_id: msgId }
       this.responseHandlers.set(msgId, { resolve, reject })
       try {
+        console.log("[DerivAPI] Sending:", JSON.stringify(payload))
         this.ws.send(JSON.stringify(payload))
       } catch (error) {
         this.responseHandlers.delete(msgId)
@@ -295,7 +298,7 @@ class DerivAPI {
 
 
   async getActiveSymbols(category: string = "synthetic_index"): Promise<any[]> {
-    const resp = await this.send({ active_symbols: "brief" })
+    const resp = await this.send({ active_symbols: "full" })
     if (resp.error) throw new Error(resp.error.message)
     let symbols = resp.active_symbols || []
     if (category) {
@@ -366,12 +369,7 @@ class DerivAPI {
     return msgId
   }
 
-  async subscribeToTicks(symbol: string, onTick: (data: any) => void): Promise<number | null> {
-    const request = { ticks: symbol, subscribe: 1 }
-    return this.createMultiplexedSub(request, (data) => {
-        if (data.tick) onTick(data.tick)
-    })
-  }
+
 
   async fetchTicksHistoryWithSubscribe(symbol: string, count: number = 1000, onHistory: (data: any) => void, onTick: (data: any) => void): Promise<number | null> {
     const request = {
