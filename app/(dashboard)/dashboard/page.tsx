@@ -2,17 +2,13 @@
 
 import * as React from "react"
 import { 
-  Zap, 
   TrendingUp, 
-  Users, 
-  ArrowUpRight, 
-  Play, 
   Activity,
-  Clock,
-  ShieldCheck,
-  LayoutGrid,
   Radar,
-  Timer
+  LayoutGrid,
+  LineChart,
+  Zap,
+  ShieldCheck
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
