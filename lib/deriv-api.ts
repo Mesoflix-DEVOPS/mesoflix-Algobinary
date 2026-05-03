@@ -27,10 +27,25 @@ class DerivAPI {
 
   async connect(customWsUrl?: string, skipAuthorize: boolean = false): Promise<void> {
     if (!this.intentionalDisconnect && this.connectionPromise && (this.ws?.readyState === WebSocket.CONNECTING || this.ws?.readyState === WebSocket.OPEN)) {
-        return this.connectionPromise
+        // If we are connecting to a DIFFERENT URL than the one already open, we should continue.
+        // Otherwise, return existing promise.
+        if (!customWsUrl || this.ws?.url === customWsUrl) {
+            return this.connectionPromise
+        }
+    }
+    
+    // If there is an existing connection, and we want a new URL, close it first
+    if (this.ws && customWsUrl && this.ws.url !== customWsUrl) {
+        console.log("[DerivAPI] Closing existing connection to switch to:", customWsUrl)
+        this.intentionalDisconnect = true
+        this.ws.onopen = null
+        this.ws.onclose = null
+        this.ws.onerror = null
+        this.ws.close()
     }
 
     this.intentionalDisconnect = false
+
 
     if (this.pingInterval) clearInterval(this.pingInterval)
     
@@ -119,8 +134,12 @@ class DerivAPI {
           if (this.pingInterval) clearInterval(this.pingInterval)
           
           if (!this.intentionalDisconnect) {
-            setTimeout(() => this.connect(customWsUrl), 3000)
+            console.log("[DerivAPI] Unexpected disconnect. Attempting recovery...")
+            // If we were on an OTP URL, it's expired now. We must reconnect to public to trigger a new authorize()
+            const reconnectUrl = customWsUrl?.includes("otp=") ? undefined : customWsUrl
+            setTimeout(() => this.connect(reconnectUrl), 3000)
           }
+
         }
       } catch (err) {
         this.isConnected = false
@@ -217,10 +236,18 @@ class DerivAPI {
         
         // Swap to the authenticated WebSocket session
         console.log("[DerivAPI] V2: OTP Swap successful. Migrating connection...")
+        
+        // Safety: Clear listeners before closing to avoid race conditions in onclose
+        if (this.ws) {
+            this.ws.onopen = null
+            this.ws.onclose = null
+            this.ws.onerror = null
+        }
+        
         this.intentionalDisconnect = true
         this.ws?.close() 
-        await this.connect(authenticatedWsUrl, true)
-        return { authorize: { loginid: activeAcct } }
+        // Reset intentionalDisconnect BEFORE calling connect, but connect() handles it anyway
+        return this.connect(authenticatedWsUrl, true)
     } catch (e: any) {
         console.error("[DerivAPI] V2 Auth Failed:", e)
         return { error: { message: e.message } }

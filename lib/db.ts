@@ -30,7 +30,7 @@ async function createTables() {
       username VARCHAR(255) UNIQUE NOT NULL,
       full_name VARCHAR(255),
       avatar_url VARCHAR(500),
-      deriv_account_id VARCHAR(255),
+      deriv_account_id VARCHAR(255) UNIQUE,
       deriv_token VARCHAR(500),
       balance DECIMAL(15, 2) DEFAULT 0,
       total_trades INTEGER DEFAULT 0,
