@@ -10,6 +10,7 @@ interface Subscription {
 
 class DerivAPI {
   private ws: WebSocket | null = null
+  private publicWs: WebSocket | null = null
   private messageId = 0
   private responseHandlers: Map<number, { resolve: (data: any) => void, reject: (err: any) => void }> = new Map()
   private subscriptionRegistry: Map<string, Subscription> = new Map()
@@ -21,129 +22,59 @@ class DerivAPI {
   private intentionalDisconnect = false
 
   private isV2Token(token: string): boolean {
-    // V2 tokens are typically long JWTs or opaque strings (> 128 chars) containing dots or complex characters
     return token.length > 128 || token.includes(".")
   }
 
   async connect(customWsUrl?: string, skipAuthorize: boolean = false): Promise<void> {
-    if (!this.intentionalDisconnect && this.connectionPromise && (this.ws?.readyState === WebSocket.CONNECTING || this.ws?.readyState === WebSocket.OPEN)) {
-        // If we are connecting to a DIFFERENT URL than the one already open, we should continue.
-        // Otherwise, return existing promise.
-        if (!customWsUrl || this.ws?.url === customWsUrl) {
-            return this.connectionPromise
-        }
-    }
+    const isOTPUrl = customWsUrl?.includes("otp=")
     
-    // If there is an existing connection, and we want a new URL, close it first
-    if (this.ws && customWsUrl && this.ws.url !== customWsUrl) {
-        console.log("[DerivAPI] Closing existing connection to switch to:", customWsUrl)
-        this.intentionalDisconnect = true
-        this.ws.onopen = null
-        this.ws.onclose = null
-        this.ws.onerror = null
-        this.ws.close()
+    // If we are connecting to a private URL (OTP), we keep the public one alive for market data
+    if (isOTPUrl) {
+        return this.connectPrivate(customWsUrl!)
     }
 
+    if (!this.intentionalDisconnect && this.connectionPromise && (this.publicWs?.readyState === WebSocket.CONNECTING || this.publicWs?.readyState === WebSocket.OPEN)) {
+        return this.connectionPromise
+    }
+    
     this.intentionalDisconnect = false
-
-
     if (this.pingInterval) clearInterval(this.pingInterval)
-    
-    // Default flow detection from localStorage
-    if (typeof window !== "undefined") {
-        this.currentAuthFlow = "new_v2"
-    }
 
-    
-    // Choose endpoint based on known state or custom URL
-    const token = typeof window !== "undefined" ? localStorage.getItem("derivex_token") : null
-    let wsUrl = customWsUrl
-    
-    if (!wsUrl) {
-        wsUrl = "wss://api.derivws.com/trading/v1/options/ws/public"
-        this.currentAuthFlow = "new_v2"
-    }
-
+    const wsUrl = customWsUrl || "wss://api.derivws.com/trading/v1/options/ws/public"
     
     this.connectionPromise = new Promise((resolve, reject) => {
       try {
-        console.log(`[DerivAPI] Connecting (Flow: ${this.currentAuthFlow}):`, wsUrl)
-        this.ws = new WebSocket(wsUrl!)
+        console.log(`[DerivAPI] Connecting Public:`, wsUrl)
+        this.publicWs = new WebSocket(wsUrl)
 
-        this.ws.onopen = async () => {
-          console.log("[DerivAPI] Connection established")
+        this.publicWs.onopen = async () => {
+          console.log("[DerivAPI] Public Connection established")
           this.isConnected = true
           this.startHeartbeat()
           
-          // CRITICAL: Prevent infinite authorization loop
-          // If skipAuthorize is true OR the URL already contains an OTP, the socket is already authorized.
-          const isOTPUrl = wsUrl?.includes("otp=")
-          if (token && !skipAuthorize && !isOTPUrl) {
+          const token = typeof window !== "undefined" ? localStorage.getItem("derivex_token") : null
+          if (token && !skipAuthorize) {
               try {
                 await this.authorize(token)
               } catch (e) {
                 console.warn("[DerivAPI] Background authorization failed:", e)
               }
-          } else if (isOTPUrl) {
-              console.log("[DerivAPI] Authenticated V2 session active via OTP.")
           }
 
           this.resubscribeAll()
           resolve()
         }
 
-        this.ws.onmessage = (event) => {
-          try {
-            const data = JSON.parse(event.data)
-            // Handle V2 vs Legacy Heartbeats
-            if (data.msg_type === "ping" || data.ping) return
-            
-            if (data.error?.code === 'AlreadySubscribed') {
-                return
-            }
-
-            if (data.error) {
-                console.error("[DerivAPI] Server Error:", data.error)
-            }
-
-            const reqId = data.req_id
-            const subKey = this.idToSubKey.get(reqId)
-            if (subKey) {
-                const sub = this.subscriptionRegistry.get(subKey)
-                sub?.callbacks.forEach(cb => cb(data))
-                return
-            }
-
-            if (reqId && this.responseHandlers.has(reqId)) {
-                const handler = this.responseHandlers.get(reqId)
-                handler?.resolve(data)
-                this.responseHandlers.delete(reqId)
-            }
-          } catch (err) {
-            console.error("[DerivAPI] Parse error:", err)
-          }
-        }
-
-        this.ws.onclose = () => {
+        this.publicWs.onmessage = (event) => this.handleMessage(event, true)
+        this.publicWs.onclose = () => {
           this.isConnected = false
           this.connectionPromise = null
-          this.messageId = 0
-          console.log("[DerivAPI] Connection closed")
-          this.responseHandlers.forEach(h => h.reject(new Error("Lost")))
-          this.responseHandlers.clear()
-          if (this.pingInterval) clearInterval(this.pingInterval)
-          
+          console.log("[DerivAPI] Public Connection closed")
           if (!this.intentionalDisconnect) {
-            console.log("[DerivAPI] Unexpected disconnect. Attempting recovery...")
-            // If we were on an OTP URL, it's expired now. We must reconnect to public to trigger a new authorize()
-            const reconnectUrl = customWsUrl?.includes("otp=") ? undefined : customWsUrl
-            setTimeout(() => this.connect(reconnectUrl), 3000)
+            setTimeout(() => this.connect(), 3000)
           }
-
         }
       } catch (err) {
-        this.isConnected = false
-        this.connectionPromise = null
         reject(err)
       }
     })
@@ -151,12 +82,63 @@ class DerivAPI {
     return this.connectionPromise
   }
 
+  private async connectPrivate(wsUrl: string): Promise<void> {
+    return new Promise((resolve) => {
+        console.log(`[DerivAPI] Connecting Private:`, wsUrl)
+        if (this.ws) {
+            this.ws.onclose = null
+            this.ws.close()
+        }
+        this.ws = new WebSocket(wsUrl)
+        this.ws.onopen = () => {
+            console.log("[DerivAPI] Private Connection established")
+            resolve()
+        }
+        this.ws.onmessage = (event) => this.handleMessage(event, false)
+        this.ws.onclose = () => {
+            console.log("[DerivAPI] Private Connection closed. Falling back to public for auth...")
+            this.ws = null
+        }
+    })
+  }
+
+  private handleMessage(event: MessageEvent, isPublic: boolean) {
+    try {
+      const data = JSON.parse(event.data)
+      if (data.msg_type === "ping" || data.ping) return
+      
+      if (data.error) {
+          console.error(`[DerivAPI] ${isPublic ? 'Public' : 'Private'} Error:`, data.error)
+      }
+
+      const reqId = data.req_id
+      const subKey = this.idToSubKey.get(reqId)
+      if (subKey) {
+          const sub = this.subscriptionRegistry.get(subKey)
+          sub?.callbacks.forEach(cb => cb(data))
+          return
+      }
+
+      if (reqId && this.responseHandlers.has(reqId)) {
+          const handler = this.responseHandlers.get(reqId)
+          handler?.resolve(data)
+          this.responseHandlers.delete(reqId)
+      }
+    } catch (err) {
+      console.error("[DerivAPI] Parse error:", err)
+    }
+  }
+
+
   private resubscribeAll() {
     if (this.subscriptionRegistry.size === 0) return
     console.log(`[DerivAPI] Restoring ${this.subscriptionRegistry.size} subscriptions...`)
     this.subscriptionRegistry.forEach((sub) => {
-        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-            this.ws.send(JSON.stringify({ ...sub.request, req_id: sub.id }))
+        const isPublicReq = !sub.request.buy && !sub.request.sell && !sub.request.proposal_open_contract && !sub.request.balance
+        const socket = isPublicReq ? this.publicWs : (this.ws || this.publicWs)
+        
+        if (socket && socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({ ...sub.request, req_id: sub.id }))
         }
     })
   }
@@ -167,14 +149,14 @@ class DerivAPI {
   }
 
   private startHeartbeat() {
-    // Temporarily disabled to identify UnrecognisedRequest source
-    /*
     this.pingInterval = setInterval(() => {
-        if (this.isConnected && this.ws?.readyState === WebSocket.OPEN) {
+        if (this.isConnected && this.publicWs?.readyState === WebSocket.OPEN) {
+            this.publicWs.send(JSON.stringify({ ping: 1 }))
+        }
+        if (this.ws?.readyState === WebSocket.OPEN) {
             this.ws.send(JSON.stringify({ ping: 1 }))
         }
     }, 30000)
-    */
   }
 
 
@@ -190,11 +172,13 @@ class DerivAPI {
       this.connectionPromise = null
   }
 
-  private async send(message: any): Promise<any> {
+  private async send(message: any, forcePublic: boolean = false): Promise<any> {
     await this.waitForConnection()
 
     return new Promise((resolve, reject) => {
-      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      const socket = (forcePublic || !this.ws) ? this.publicWs : this.ws
+      
+      if (!socket || socket.readyState !== WebSocket.OPEN) {
         reject(new Error("No connection"))
         return
       }
@@ -298,7 +282,7 @@ class DerivAPI {
 
 
   async getActiveSymbols(category: string = "synthetic_index"): Promise<any[]> {
-    const resp = await this.send({ active_symbols: "full" })
+    const resp = await this.send({ active_symbols: "full" }, true)
     if (resp.error) throw new Error(resp.error.message)
     let symbols = resp.active_symbols || []
     if (category) {
@@ -348,6 +332,9 @@ class DerivAPI {
     const subKey = JSON.stringify(request)
     const existing = this.subscriptionRegistry.get(subKey)
 
+    // Check if this is a market data request (doesn't need auth)
+    const isPublicReq = !request.buy && !request.sell && !request.proposal_open_contract && !request.balance
+
     if (existing) {
         existing.callbacks.add(onUpdate)
         const mockId = Math.floor(Math.random() * 1000000)
@@ -363,8 +350,11 @@ class DerivAPI {
     }
     this.subscriptionRegistry.set(subKey, newSub)
     this.idToSubKey.set(msgId, subKey)
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-        this.ws.send(JSON.stringify({ ...request, req_id: msgId }))
+    
+    const socket = isPublicReq ? this.publicWs : (this.ws || this.publicWs)
+    if (socket && socket.readyState === WebSocket.OPEN) {
+        console.log(`[DerivAPI] Sending Sub (${isPublicReq ? 'Public' : 'Private'}):`, JSON.stringify({ ...request, req_id: msgId }))
+        socket.send(JSON.stringify({ ...request, req_id: msgId }))
     }
     return msgId
   }
