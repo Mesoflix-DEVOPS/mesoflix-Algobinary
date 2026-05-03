@@ -122,7 +122,10 @@ export default function MarketAnalysisPage() {
             <div className="flex items-center gap-4">
                 <div className="flex flex-col items-end">
                     <span className="text-3xl font-mono font-black text-white tracking-tighter">
-                        {lastTick?.quote?.toLocaleString(undefined, { minimumFractionDigits: marketInfo?.pip_size === 0.01 ? 2 : 4 }) || "---"}
+                        {lastTick?.quote?.toLocaleString(undefined, { 
+                          minimumFractionDigits: marketInfo?.pip_size ? Math.round(Math.abs(Math.log10(marketInfo.pip_size))) : 2,
+                          maximumFractionDigits: marketInfo?.pip_size ? Math.round(Math.abs(Math.log10(marketInfo.pip_size))) : 2 
+                        }) || "---"}
                     </span>
                     <span className="text-[10px] font-bold text-teal-500 uppercase flex items-center gap-1">
                         <Signal className="w-3 h-3 animate-pulse" />

@@ -115,6 +115,11 @@ class DerivAPI {
       const subKey = this.idToSubKey.get(reqId)
       if (subKey) {
           const sub = this.subscriptionRegistry.get(subKey)
+          // Store the server-provided subscription ID if available
+          const serverSubId = data.subscription?.id || data.tick?.id || data.balance?.id
+          if (serverSubId && sub) {
+              (sub as any).serverSubId = serverSubId
+          }
           sub?.callbacks.forEach(cb => cb(data))
           return
       }
@@ -128,7 +133,6 @@ class DerivAPI {
       console.error("[DerivAPI] Parse error:", err)
     }
   }
-
 
   private resubscribeAll() {
     if (this.subscriptionRegistry.size === 0) return
@@ -144,7 +148,7 @@ class DerivAPI {
   }
 
   private async waitForConnection(): Promise<void> {
-    if (this.isConnected && this.ws?.readyState === WebSocket.OPEN) return
+    if (this.isConnected && this.publicWs?.readyState === WebSocket.OPEN) return
     await this.connect()
   }
 
@@ -188,7 +192,7 @@ class DerivAPI {
       this.responseHandlers.set(msgId, { resolve, reject })
       try {
         console.log("[DerivAPI] Sending:", JSON.stringify(payload))
-        this.ws.send(JSON.stringify(payload))
+        socket.send(JSON.stringify(payload))
       } catch (error) {
         this.responseHandlers.delete(msgId)
         reject(error)
@@ -214,18 +218,15 @@ class DerivAPI {
         }
         
         const data = await res.json()
-        // Deriv V2 OTP Response structure: { data: { url: "..." } }
         const authenticatedWsUrl = data.data?.url || data.data?.ws_url || data.url || data.ws_url
         if (!authenticatedWsUrl) {
             console.error("[DerivAPI] Invalid OTP response structure:", data)
             throw new Error("No authenticated WebSocket URL returned.")
         }
 
-        
         // Swap to the authenticated WebSocket session
         console.log("[DerivAPI] V2: OTP Swap successful. Migrating connection...")
         
-        // Safety: Clear listeners before closing to avoid race conditions in onclose
         if (this.ws) {
             this.ws.onopen = null
             this.ws.onclose = null
@@ -234,7 +235,6 @@ class DerivAPI {
         
         this.intentionalDisconnect = true
         this.ws?.close() 
-        // Reset intentionalDisconnect BEFORE calling connect, but connect() handles it anyway
         return this.connect(authenticatedWsUrl, true)
     } catch (e: any) {
         console.error("[DerivAPI] V2 Auth Failed:", e)
@@ -271,7 +271,6 @@ class DerivAPI {
                 is_virtual: acct.account_type === "demo" ? 1 : 0,
                 currency: acct.currency || "USD",
                 token: activeToken,
-                // Map balance for the syncBalances efficiency
                 balance: acct.balance || 0
             }))
         }
@@ -326,7 +325,7 @@ class DerivAPI {
 
     return this.send({
       buy: 1,
-      price: params.amount, // MUST match the stake amount for maximum purchase price
+      price: params.amount, 
       parameters
     })
   }
@@ -334,7 +333,6 @@ class DerivAPI {
   private async createMultiplexedSub(request: any, onUpdate: (data: any) => void): Promise<number | null> {
     await this.waitForConnection()
     
-    // Validate request has at least one key besides 'subscribe' or 'req_id'
     const keys = Object.keys(request).filter(k => k !== 'subscribe' && k !== 'req_id')
     if (keys.length === 0) {
         console.error("[DerivAPI] Malformed subscription request (no command key):", request)
@@ -344,7 +342,6 @@ class DerivAPI {
     const subKey = JSON.stringify(request)
     const existing = this.subscriptionRegistry.get(subKey)
 
-    // Check if this is a market data request (doesn't need auth)
     const isPublicReq = !request.buy && !request.sell && !request.proposal_open_contract && !request.balance
 
     if (existing) {
@@ -371,8 +368,6 @@ class DerivAPI {
     return msgId
   }
 
-
-
   async fetchTicksHistoryWithSubscribe(symbol: string, count: number = 1000, onHistory: (data: any) => void, onTick: (data: any) => void): Promise<number | null> {
     const request = {
         ticks_history: symbol,
@@ -397,7 +392,17 @@ class DerivAPI {
     const subKey = this.idToSubKey.get(reqId)
     if (!subKey) return
     const sub = this.subscriptionRegistry.get(subKey)
-    if (sub) this.idToSubKey.delete(reqId)
+    if (sub) {
+        const serverSubId = (sub as any).serverSubId
+        if (serverSubId) {
+            const isPublicReq = !sub.request.buy && !sub.request.sell && !sub.request.proposal_open_contract && !sub.request.balance
+            const socket = isPublicReq ? this.publicWs : (this.ws || this.publicWs)
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({ forget: serverSubId }))
+            }
+        }
+        this.idToSubKey.delete(reqId)
+    }
   }
 
   async subscribeToOpenContract(contractId: string, onUpdate: (data: any) => void): Promise<void> {
