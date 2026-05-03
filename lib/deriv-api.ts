@@ -292,6 +292,10 @@ class DerivAPI {
   }
 
   async subscribeToTicks(symbol: string, onTick: (data: any) => void): Promise<number | null> {
+    if (!symbol) {
+        console.warn("[DerivAPI] subscribeToTicks called without symbol")
+        return null
+    }
     const request = { ticks: symbol, subscribe: 1 }
     return this.createMultiplexedSub(request, (data) => {
         if (data.tick) onTick(data.tick)
@@ -327,8 +331,16 @@ class DerivAPI {
     })
   }
 
-  private async createMultiplexedSub(request: any, onUpdate: (data: any) => void): Promise<number> {
+  private async createMultiplexedSub(request: any, onUpdate: (data: any) => void): Promise<number | null> {
     await this.waitForConnection()
+    
+    // Validate request has at least one key besides 'subscribe' or 'req_id'
+    const keys = Object.keys(request).filter(k => k !== 'subscribe' && k !== 'req_id')
+    if (keys.length === 0) {
+        console.error("[DerivAPI] Malformed subscription request (no command key):", request)
+        return null
+    }
+
     const subKey = JSON.stringify(request)
     const existing = this.subscriptionRegistry.get(subKey)
 

@@ -38,12 +38,16 @@ export default function ChartingPage() {
       try {
         const symbols = await derivAPI.getActiveSymbols("synthetic_index")
         // Limit to 12 popular indices for the grid
-        const topSymbols = symbols.slice(0, 12).map(s => ({
-          symbol: s.symbol,
-          display_name: s.display_name,
-          submarket_display_name: s.submarket_display_name,
-          history: []
-        }))
+        const topSymbols = symbols
+          .filter(s => s.symbol) // Ensure symbol exists
+          .slice(0, 12)
+          .map(s => ({
+            symbol: s.symbol,
+            display_name: s.display_name,
+            submarket_display_name: s.submarket_display_name,
+            history: []
+          }))
+
         setMarkets(topSymbols)
         setIsLoading(false)
 
