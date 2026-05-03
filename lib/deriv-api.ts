@@ -295,7 +295,7 @@ class DerivAPI {
 
 
   async getActiveSymbols(category: string = "synthetic_index"): Promise<any[]> {
-    const resp = await this.send({ active_symbols: "brief", product_type: "basic" })
+    const resp = await this.send({ active_symbols: "brief" })
     if (resp.error) throw new Error(resp.error.message)
     let symbols = resp.active_symbols || []
     if (category) {
